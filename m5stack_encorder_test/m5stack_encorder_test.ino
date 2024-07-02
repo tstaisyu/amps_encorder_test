@@ -1,17 +1,17 @@
-#include <SoftwareSerial.h>
+#include <HardwareSerial.h>
 
 // UARTピンの設定
-const int rxPin = 7; // UART_RXに接続
-const int txPin = 8; // UART_TXに接続
+const int rxPin = 16; // UART_RXに接続
+const int txPin = 17; // UART_TXに接続
 
 // ソフトウェアシリアルの初期化
-SoftwareSerial mySerial(rxPin, txPin);
+HardwareSerial mySerial(2);
 
 void setup() {
   // デバッグ用シリアル通信の開始
   Serial.begin(115200);
   // ハブホイールモーターとの通信用シリアル通信の開始
-  mySerial.begin(115200);
+  mySerial.begin(115200, SERIAL_8N1, rxPin, txPin);
 }
 
 void loop() {
