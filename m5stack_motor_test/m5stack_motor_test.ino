@@ -1,18 +1,23 @@
 #include <HardwareSerial.h>
 
-HardwareSerial mySerial(2); // 使用するHardwareSerialポートを指定
+HardwareSerial mySerial(2); // RX=16, TX=17を使用
 
 void setup() {
   Serial.begin(115200); // デバッグ用シリアルポートを開始
   mySerial.begin(115200, SERIAL_8N1, 16, 17); // モータードライバとのUART通信を開始
 
-  // 5 RPMの速度を設定するコマンドを送信
-  int rpm = 5; // RPM値
-  sendVelocityCommand(0x70B1, rpm);
+  // オペレーションモードを速度制御モードに設定（モード3）
+  sendCommand(0x7017, 0x51, 0x03, 0x00); // 0x51は16ビットデータ書き込みのコマンド
+
+  // モーターを有効化
+  sendCommand(0x7019, 0x52, 0x0F, 0x00); // コントロールワードを 'Enable' に設定
+
+  // 速度を100 RPMに設定
+  sendCommand(0x70B1, 0x52, 0x64, 0x00); // 100 RPM設定
 }
 
 void loop() {
-  // モータードライバからの応答を受信して表示
+  // 応答を受信して表示
   if (mySerial.available()) {
     Serial.print("Received: ");
     while (mySerial.available()) {
@@ -21,18 +26,18 @@ void loop() {
     }
     Serial.println();
   }
-  delay(1000); // 次の読み取りまで1秒待機
+  delay(1000); // 1秒ごとにループ
 }
 
-void sendVelocityCommand(int address, int rpm) {
+void sendCommand(uint16_t address, byte cmd, uint16_t data, byte msbData) {
   byte addrH = highByte(address);
   byte addrL = lowByte(address);
-  byte rpmH = highByte(rpm);
-  byte rpmL = lowByte(rpm);
-  byte data[] = {0x01, 0x52, addrH, addrL, 0x00, 0x00, 0x00, rpmL, rpmH};
-  byte checksum = calculateChecksum(data, sizeof(data));
+  byte dataH = highByte(data);
+  byte dataL = lowByte(data);
+  byte packet[] = {0x01, cmd, addrH, addrL, 0x00, 0x00, msbData, dataL, dataH};
+  byte checksum = calculateChecksum(packet, sizeof(packet));
 
-  mySerial.write(data, sizeof(data)); // コマンドを送信
+  mySerial.write(packet, sizeof(packet)); // コマンドを送信
   mySerial.write(checksum); // チェックサムを送信
 }
 
