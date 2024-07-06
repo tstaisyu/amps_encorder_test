@@ -22,12 +22,30 @@ void setup() {
 }
 
 void loop() {
-  if (Serial.available()) {
-    float velocity_mps = Serial.parseFloat();
-    int velocity_dec = velocityToDEC(velocity_mps);
-    sendVelocityDEC(velocity_dec);
+  static unsigned long lastSendTime = 0;
+  const int sendInterval = 100; // ミリ秒単位でコマンド送信間隔
+  static int last_velocity_dec = 0; // 最後に送信した速度を保持する変数
+
+  // 新しいデータがあるか確認
+  if (Serial.available() > 0) {
+    // 入力を読み取り、新しい速度があれば更新
+    while (Serial.available() > 0) {
+      float velocity_mps = Serial.parseFloat(); // 速度を読み取る
+      if (velocity_mps != 0) { // 0以外の値を受け取った場合のみ更新
+        int velocity_dec = velocityToDEC(velocity_mps); // m/sをDECに変換
+        sendVelocityDEC(velocity_dec); // 速度を送信
+        last_velocity_dec = velocity_dec; // 送信した速度を記録
+        lastSendTime = millis(); // 最後にコマンドを送信した時間を更新
+      }
+    }
   }
 
+  // 前回の送信から一定時間が経過したら、最後に設定した速度を再送
+  if (millis() - lastSendTime > sendInterval) {
+    sendVelocityDEC(last_velocity_dec); // 最後に受け取った速度を再送
+    lastSendTime = millis();
+  }
+  
   // レスポンスを受信して表示
   if (mySerial.available()) {
     Serial.print("Received: ");
@@ -43,7 +61,7 @@ void loop() {
   }
 }
 
-void sendVelocityDEC(int velocity_dec) {
+void sendVelocityDEC(uint32_t velocity_dec) {
   sendCommand(0x70B2, 0x54, velocity_dec); // DECを設定
 }
 
@@ -62,7 +80,7 @@ void sendCommand(uint16_t address, byte cmd, uint32_t data) {
   mySerial.write(packet, sizeof(packet)); // コマンドを送信
   mySerial.write(checksum); // チェックサムを送信
   Serial.print("Sent DEC: ");
-  Serial.println(rpm);
+  Serial.println(data);
   printPacket(packet, sizeof(packet), checksum);
 }
 
@@ -89,7 +107,8 @@ byte calculateChecksum(byte *data, int len) {
   return sum & 0xFF; // チェックサム計算
 }
 
-int calculateVelocityDEC(float velocity_mps) {
-  // 速度変換式 [DEC] = ([rpm]*512*4096)/1875;
-  return int((velocity_mps * 512 * 4096) / 1875);
-}
+uint32_t velocityToDEC(float velocity_mps) {
+    float wheel_circumference = 0.11f * 3.14159f; // 車輪の円周 = 直径 * π
+    float rpm = (velocity_mps * 60.0f) / wheel_circumference; // 1分間の回転数
+    uint32_t dec = static_cast<uint32_t>((rpm * 512.0f * 4096.0f) / 1875.0f); // DEC値の計算
+    return dec;}
