@@ -9,25 +9,23 @@ void setup() {
   Serial.println("Starting motor setup...");
 
   // オペレーションモードを速度制御モードに設定（モード3）
-  sendCommand(0x7017, 0x51, 0x03, 0x00);
-  delay(100); // コマンド処理に時間を与える
+  sendCommand(0x7017, 0x51, 0x00000003);
+  delay(100);
 
   // エマージェンシーストップを解除
-  sendCommand(0x701F, 0x51, 0x00, 0x00); // 0:Disable
+  sendCommand(0x701F, 0x51, 0x00000000);
   delay(100);
 
   // モーターを有効化
-  sendCommand(0x7019, 0x52, 0x0F, 0x00);
+  sendCommand(0x7019, 0x52, 0x0000000F);
   delay(100);
 }
 
 void loop() {
   if (Serial.available()) {
-    int velocity_rpm = Serial.parseInt();
-    if (velocity_rpm > 0) {
-      int velocity_dec = calculateVelocityDEC(velocity_rpm);
-      sendVelocityDEC(velocity_dec);
-    }
+    float velocity_mps = Serial.parseFloat();
+    int velocity_dec = velocityToDEC(velocity_mps);
+    sendVelocityDEC(velocity_dec);
   }
 
   // レスポンスを受信して表示
@@ -46,23 +44,31 @@ void loop() {
 }
 
 void sendVelocityDEC(int velocity_dec) {
-  int lower_byte = velocity_dec & 0xFF;
-  int upper_byte = (velocity_dec >> 8) & 0xFF;
-  sendCommand(0x70B2, 0x54, lower_byte, upper_byte); // Target Velocity_DECを設定
+  sendCommand(0x70B2, 0x54, velocity_dec); // DECを設定
 }
 
-void sendCommand(uint16_t address, byte cmd, uint16_t data, byte msbData) {
+void sendCommand(uint16_t address, byte cmd, uint32_t data) {
   byte addrH = highByte(address);
   byte addrL = lowByte(address);
-  byte dataH = highByte(data);
-  byte dataL = lowByte(data);
-  byte packet[] = {0x01, cmd, addrH, addrL, 0x00, 0x00, 0x00, 0x00, dataL};
+  byte dataMSB = (data >> 24) & 0xFF;  // 最上位バイト
+  byte dataN1 = (data >> 16) & 0xFF;   // 2番目のバイト
+  byte dataN2 = (data >> 8) & 0xFF;    // 3番目のバイト
+  byte dataLSB = data & 0xFF;          // 最下位バイト
+  byte ErrR = 0x00; // エラー情報
+
+  byte packet[] = {0x01, cmd, addrH, addrL, ErrR, dataMSB, dataN1, dataN2, dataLSB};
   byte checksum = calculateChecksum(packet, sizeof(packet));
 
   mySerial.write(packet, sizeof(packet)); // コマンドを送信
   mySerial.write(checksum); // チェックサムを送信
+  Serial.print("Sent DEC: ");
+  Serial.println(rpm);
+  printPacket(packet, sizeof(packet), checksum);
+}
+
+void printPacket(byte *packet, int length, byte checksum) {
   Serial.print("Sent: ");
-  for (int i = 0; i < sizeof(packet); i++) {
+  for (int i = 0; i < length; i++) {
     if (packet[i] < 16) {
       Serial.print("0");
     }
@@ -83,8 +89,7 @@ byte calculateChecksum(byte *data, int len) {
   return sum & 0xFF; // チェックサム計算
 }
 
-int calculateVelocityDEC(int rpm) {
+int calculateVelocityDEC(float velocity_mps) {
   // 速度変換式 [DEC] = ([rpm]*512*4096)/1875;
-  long dec = long(rpm) * 512L * 4096L / 1875L;
-  return int(dec);
+  return int((velocity_mps * 512 * 4096) / 1875);
 }
