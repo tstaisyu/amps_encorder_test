@@ -17,16 +17,17 @@ void setup() {
   delay(100);
 
   // モーターを有効化
-  sendCommand(0x7019, 0x52, 0x00, 0x0F);
+  sendCommand(0x7019, 0x52, 0x0F, 0x00);
   delay(100);
-
-  sendCommand(0x70B1, 0x52, 0x64, 0x00);
-  delay(100);
-
 
 }
 
 void loop() {
+  // コマンドを受信して速度を設定
+  if (Serial.available()) {
+    int speed = Serial.parseInt(); // 速度値を受け取る
+    setMotorSpeed(speed);
+  }
 
   // レスポンスを受信して表示
   if (mySerial.available()) {
@@ -43,12 +44,20 @@ void loop() {
   }
 }
 
+void setMotorSpeed(int speed) {
+  // 速度をHEX形式に変換して送信
+  uint16_t hexSpeed = (uint16_t)speed;
+  sendCommand(0x70B1, 0x52, hexSpeed, 0x00);
+  Serial.print("Setting speed to: ");
+  Serial.println(speed);
+}
+
 void sendCommand(uint16_t address, byte cmd, uint16_t data, byte msbData) {
   byte addrH = highByte(address);
   byte addrL = lowByte(address);
   byte dataH = highByte(data);
   byte dataL = lowByte(data);
-  byte packet[] = {0x01, cmd, addrH, addrL, 0x00, 0x00, msbData, dataL, dataH};
+  byte packet[] = {0x01, cmd, addrH, addrL, 0x00, 0x00, 0x00, 0x00, dataL};
   byte checksum = calculateChecksum(packet, sizeof(packet));
 
   mySerial.write(packet, sizeof(packet)); // コマンドを送信
