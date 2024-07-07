@@ -2,6 +2,10 @@
 
 HardwareSerial mySerial(2); // RX=16, TX=17を使用
 
+// モータードライバからの実速度を取得するためのオブジェクトアドレス
+const uint16_t ACTUAL_SPEED_DEC_ADDRESS = 0x7077;
+const byte READ_COMMAND = 0x52; // 読み取りコマンド
+
 void setup() {
   Serial.begin(115200); // デバッグ用シリアルポートを開始
   mySerial.begin(115200, SERIAL_8N1, 16, 17); // モータードライバとのUART通信を開始
@@ -19,6 +23,7 @@ void setup() {
   // モーターを有効化
   sendCommand(0x7019, 0x52, 0x0000000F);
   delay(100);
+
 }
 
 void loop() {
@@ -29,14 +34,12 @@ void loop() {
   // 新しいデータがあるか確認
   if (Serial.available() > 0) {
     // 入力を読み取り、新しい速度があれば更新
-    while (Serial.available() > 0) {
-      float velocity_mps = Serial.parseFloat(); // 速度を読み取る
-      if (velocity_mps != 0) { // 0以外の値を受け取った場合のみ更新
-        int velocity_dec = velocityToDEC(velocity_mps); // m/sをDECに変換
-        sendVelocityDEC(velocity_dec); // 速度を送信
-        last_velocity_dec = velocity_dec; // 送信した速度を記録
-        lastSendTime = millis(); // 最後にコマンドを送信した時間を更新
-      }
+    float velocity_mps = Serial.parseFloat(); // 速度を読み取る
+    if (velocity_mps != 0) { // 0以外の値を受け取った場合のみ更新
+      int velocity_dec = velocityToDEC(velocity_mps); // m/sをDECに変換
+      sendVelocityDEC(velocity_dec); // 速度を送信
+      last_velocity_dec = velocity_dec; // 送信した速度を記録
+      lastSendTime = millis(); // 最後にコマンドを送信した時間を更新
     }
   }
 
@@ -46,6 +49,9 @@ void loop() {
     lastSendTime = millis();
   }
   
+  // 実速度の読み取りと表示
+  readActualSpeed();
+
   // レスポンスを受信して表示
   if (mySerial.available()) {
     Serial.print("Received: ");
@@ -112,3 +118,7 @@ uint32_t velocityToDEC(float velocity_mps) {
     float rpm = (velocity_mps * 60.0f) / wheel_circumference; // 1分間の回転数
     uint32_t dec = static_cast<uint32_t>((rpm * 512.0f * 4096.0f) / 1875.0f); // DEC値の計算
     return dec;}
+
+void readActualSpeed() {
+  sendCommand(ACTUAL_SPEED_DEC_ADDRESS, READ_COMMAND, 0x00000000); // 実速度を読み取るコマンドを送信
+}
