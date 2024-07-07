@@ -107,8 +107,11 @@ void subscription_callback(const void * msgin) {
   speed_ang = msg->angular.z;
 
   static unsigned long lastSendTime = 0;
-  const int sendInterval = 100; // ミリ秒単位でコマンド送信間隔
+  const int sendInterval = 20; // ミリ秒単位でコマンド送信間隔
   static int last_velocity_dec = 0; // 最後に送信した速度を保持する変数
+
+  static unsigned long lastUpdateTime = 0;
+  const long updateInterval = 20; // 更新間隔を100ミリ秒に設定
 
   // 新しいデータがあるか確認
   if (Serial.available() > 0) {
@@ -128,8 +131,23 @@ void subscription_callback(const void * msgin) {
     lastSendTime = millis();
   }
   
-  // 実速度の読み取りと表示
-  readActualSpeed();
+  unsigned long currentTime = millis();
+  if (currentTime - lastUpdateTime > updateInterval) {
+    readActualSpeed();  // 実速度を読み取る
+    lastUpdateTime = currentTime;
+  }
+
+  // 受信データの処理
+  if (mySerial.available()) {
+    uint32_t receivedDec = 0;
+    int bytesToRead = sizeof(receivedDec);
+    if (mySerial.readBytes((char*)&receivedDec, bytesToRead) == bytesToRead) {
+      float velocity_mps = calculateVelocityMPS(receivedDec);
+      Serial.print("Velocity in mps: ");
+      Serial.println(velocity_mps, 3);  // 3桁の精度で表示
+    }
+  }
+
   delay(30); // 読み取り間隔を30ミリ秒に設定
 
   // レスポンスを受信して表示
@@ -268,4 +286,9 @@ uint32_t velocityToDEC(float velocity_mps) {
 
 void readActualSpeed() {
   sendCommand(ACTUAL_SPEED_DEC_ADDRESS, READ_COMMAND, NO_DATA); // 実速度を読み取るコマンドを送信
+}
+
+float calculateVelocityMPS(uint32_t dec) {
+    // ここに実際の変換ロジックを記述
+    return (dec * WHEEL_CIRCUMFERENCE_METERS) / (GEAR_RATIO * ENCODER_RESOLUTION);
 }
