@@ -28,7 +28,7 @@ void setup() {
 
 void loop() {
   static unsigned long lastSendTime = 0;
-  const int sendInterval = 100; // ミリ秒単位でコマンド送信間隔
+  const int sendInterval = 1000; // ミリ秒単位でコマンド送信間隔
   static int last_velocity_dec = 0; // 最後に送信した速度を保持する変数
 
   // 新しいデータがあるか確認
@@ -49,25 +49,18 @@ void loop() {
     lastSendTime = millis();
   }
   
-  static unsigned long lastUpdateTime = 0;
-  const long updateInterval = 100; // 更新間隔を100ミリ秒に設定
-
-  unsigned long currentTime = millis();
-  if (currentTime - lastUpdateTime > updateInterval) {
-    readActualSpeed();  // 実速度を読み取る
-    lastUpdateTime = currentTime;
-  }
-
-  // 受信データの処理
-  if (mySerial.available()) {
+  if (mySerial.available() >= 4) {
     uint32_t receivedDec = 0;
-    int bytesToRead = sizeof(receivedDec);
-    if (mySerial.readBytes((char*)&receivedDec, bytesToRead) == bytesToRead) {
+    // 受信データを読み取る
+    if (mySerial.readBytes((char*)&receivedDec, 4) == 4) {
+      // 受信したデータを基に速度を計算し表示
       float velocity_mps = calculateVelocityMPS(receivedDec);
       Serial.print("Velocity in mps: ");
-      Serial.println(velocity_mps, 3);  // 3桁の精度で表示
+      Serial.println(velocity_mps, 3);  // 小数点以下3桁で表示
     }
   }
+
+  delay(50);  // 50msのディレイを設定してループの速度を制御
 
   // レスポンスを受信して表示
   if (mySerial.available()) {
@@ -75,12 +68,12 @@ void loop() {
     while (mySerial.available()) {
       int receivedByte = mySerial.read();
       if (receivedByte < 16) {
-        Serial.print("0"); // 1桁の場合、先頭に0を追加
+//        Serial.print("0"); // 1桁の場合、先頭に0を追加
       }
-      Serial.print(receivedByte, HEX);
-      Serial.print(" ");
+//      Serial.print(receivedByte, HEX);
+//      Serial.print(" ");
     }
-    Serial.println();
+//    Serial.println();
   }
 }
 
@@ -102,9 +95,9 @@ void sendCommand(uint16_t address, byte cmd, uint32_t data) {
 
   mySerial.write(packet, sizeof(packet)); // コマンドを送信
   mySerial.write(checksum); // チェックサムを送信
-  Serial.print("Sent DEC: ");
-  Serial.println(data);
-  printPacket(packet, sizeof(packet), checksum);
+//  Serial.print("Sent DEC: ");
+//  Serial.println(data);
+//  printPacket(packet, sizeof(packet), checksum);
 }
 
 void printPacket(byte *packet, int length, byte checksum) {
@@ -136,11 +129,36 @@ uint32_t velocityToDEC(float velocity_mps) {
     uint32_t dec = static_cast<uint32_t>((rpm * 512.0f * 4096.0f) / 1875.0f); // DEC値の計算
     return dec;}
 
-void readActualSpeed() {
+void requestSpeedData() {
   sendCommand(ACTUAL_SPEED_DEC_ADDRESS, READ_COMMAND, 0x00000000); // 実速度を読み取るコマンドを送信
 }
 
 float calculateVelocityMPS(uint32_t dec) {
-    // ここに実際の変換ロジックを記述
-    return (dec * WHEEL_CIRCUMFERENCE_METERS) / (GEAR_RATIO * ENCODER_RESOLUTION);
+  float wheel_circumference = 0.11 * PI;
+  // RPMを計算 (DEC値を元に)
+  float rpm = (dec * 1875.0) / (512.0 * 4096.0);
+  // m/sに変換
+  return (rpm * wheel_circumference) / 60.0;
+
+}
+
+uint32_t swapEndian(uint32_t val) {
+    return ((val >> 24) & 0xff) | // Move byte 3 to byte 0
+           ((val << 8) & 0xff0000) | // Move byte 1 to byte 2
+           ((val >> 8) & 0xff00) | // Move byte 2 to byte 1
+           ((val << 24) & 0xff000000); // byte 0 to byte 3
+}
+
+void readAndProcessLatestData() {
+  // 受信データが溜まっている場合、それを全て読み出す
+  while (mySerial.available() > 4) { // 最小データ長より大きい場合に読み出し
+    mySerial.read(); // バッファをクリア
+  }
+  // 最後のデータパケットを処理
+  if (mySerial.available() == 4) {
+    uint32_t receivedDec = mySerial.parseInt();
+    float velocity_mps = calculateVelocityMPS(receivedDec);
+    Serial.print("Velocity in mps: ");
+    Serial.println(velocity_mps, 3);  // 3桁の精度で表示
+  }
 }
