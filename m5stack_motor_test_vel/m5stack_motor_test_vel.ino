@@ -1,29 +1,51 @@
 #include <HardwareSerial.h>
 
+// ハードウェアシリアル設定
 HardwareSerial mySerial(2); // RX=16, TX=17を使用
 
-// モータードライバからの実速度を取得するためのオブジェクトアドレス
+// UARTピン設定
+const int RX_PIN = 16; // RXピン
+const int TX_PIN = 17; // TXピン
+
+// オブジェクトアドレス
+const uint16_t OPERATION_MODE_ADDRESS = 0x7017;
+const uint16_t EMERGENCY_STOP_ADDRESS = 0x701F;
+const uint16_t CONTROL_WORD_ADDRESS = 0x7019;
+const uint16_t TARGET_VELOCITY_DEC_ADDRESS = 0x70B2;
 const uint16_t ACTUAL_SPEED_DEC_ADDRESS = 0x7077;
-const byte READ_COMMAND = 0x52; // 読み取りコマンド
+
+// コマンド定義
+const byte WRITE_COMMAND = 0x51;
+const byte READ_COMMAND = 0x52;
+
+// デフォルト値
+const uint32_t OPERATION_MODE_SPEED_CONTROL = 0x00000003;
+const uint32_t DISABLE_EMERGENCY_STOP = 0x00000000;
+const uint32_t ENABLE_MOTOR = 0x0000000F;
+const uint32_t NO_DATA = 0x00000000;
+
+// 通信設定
+const int BAUD_RATE = 115200;
+const byte MOTOR_ID = 0x01;
+const byte ERROR_BYTE = 0x00; // エラーバイトは必要に応じて調整
 
 void setup() {
-  Serial.begin(115200); // デバッグ用シリアルポートを開始
-  mySerial.begin(115200, SERIAL_8N1, 16, 17); // モータードライバとのUART通信を開始
+  Serial.begin(BAUD_RATE);
+  mySerial.begin(BAUD_RATE, SERIAL_8N1, RX_PIN, TX_PIN);
 
   Serial.println("Starting motor setup...");
 
-  // オペレーションモードを速度制御モードに設定（モード3）
-  sendCommand(0x7017, 0x51, 0x00000003);
+  // オペレーションモードを速度制御モードに設定
+  sendCommand(OPERATION_MODE_ADDRESS, WRITE_COMMAND, OPERATION_MODE_SPEED_CONTROL);
   delay(100);
 
   // エマージェンシーストップを解除
-  sendCommand(0x701F, 0x51, 0x00000000);
+  sendCommand(EMERGENCY_STOP_ADDRESS, WRITE_COMMAND, DISABLE_EMERGENCY_STOP);
   delay(100);
 
   // モーターを有効化
-  sendCommand(0x7019, 0x52, 0x0000000F);
+  sendCommand(CONTROL_WORD_ADDRESS, WRITE_COMMAND, ENABLE_MOTOR);
   delay(100);
-
 }
 
 void loop() {
@@ -51,6 +73,7 @@ void loop() {
   
   // 実速度の読み取りと表示
   readActualSpeed();
+  delay(30); // 読み取り間隔を30ミリ秒に設定
 
   // レスポンスを受信して表示
   if (mySerial.available()) {
@@ -68,7 +91,7 @@ void loop() {
 }
 
 void sendVelocityDEC(uint32_t velocity_dec) {
-  sendCommand(0x70B2, 0x54, velocity_dec); // DECを設定
+  sendCommand(TARGET_VELOCITY_DEC_ADDRESS, WRITE_COMMAND, velocity_dec); // DECを設定
 }
 
 void sendCommand(uint16_t address, byte cmd, uint32_t data) {
@@ -78,9 +101,8 @@ void sendCommand(uint16_t address, byte cmd, uint32_t data) {
   byte dataN1 = (data >> 16) & 0xFF;   // 2番目のバイト
   byte dataN2 = (data >> 8) & 0xFF;    // 3番目のバイト
   byte dataLSB = data & 0xFF;          // 最下位バイト
-  byte ErrR = 0x00; // エラー情報
 
-  byte packet[] = {0x01, cmd, addrH, addrL, ErrR, dataMSB, dataN1, dataN2, dataLSB};
+  byte packet[] = {MOTOR_ID, cmd, addrH, addrL, ERROR_BYTE, dataMSB, dataN1, dataN2, dataLSB};
   byte checksum = calculateChecksum(packet, sizeof(packet));
 
   mySerial.write(packet, sizeof(packet)); // コマンドを送信
@@ -117,8 +139,9 @@ uint32_t velocityToDEC(float velocity_mps) {
     float wheel_circumference = 0.11f * 3.14159f; // 車輪の円周 = 直径 * π
     float rpm = (velocity_mps * 60.0f) / wheel_circumference; // 1分間の回転数
     uint32_t dec = static_cast<uint32_t>((rpm * 512.0f * 4096.0f) / 1875.0f); // DEC値の計算
-    return dec;}
+    return dec;
+    }
 
 void readActualSpeed() {
-  sendCommand(ACTUAL_SPEED_DEC_ADDRESS, READ_COMMAND, 0x00000000); // 実速度を読み取るコマンドを送信
+  sendCommand(ACTUAL_SPEED_DEC_ADDRESS, READ_COMMAND, NO_DATA); // 実速度を読み取るコマンドを送信
 }
