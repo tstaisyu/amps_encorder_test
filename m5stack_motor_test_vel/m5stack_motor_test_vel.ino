@@ -49,8 +49,25 @@ void loop() {
     lastSendTime = millis();
   }
   
-  // 実速度の読み取りと表示
-  readActualSpeed();
+  static unsigned long lastUpdateTime = 0;
+  const long updateInterval = 100; // 更新間隔を100ミリ秒に設定
+
+  unsigned long currentTime = millis();
+  if (currentTime - lastUpdateTime > updateInterval) {
+    readActualSpeed();  // 実速度を読み取る
+    lastUpdateTime = currentTime;
+  }
+
+  // 受信データの処理
+  if (mySerial.available()) {
+    uint32_t receivedDec = 0;
+    int bytesToRead = sizeof(receivedDec);
+    if (mySerial.readBytes((char*)&receivedDec, bytesToRead) == bytesToRead) {
+      float velocity_mps = calculateVelocityMPS(receivedDec);
+      Serial.print("Velocity in mps: ");
+      Serial.println(velocity_mps, 3);  // 3桁の精度で表示
+    }
+  }
 
   // レスポンスを受信して表示
   if (mySerial.available()) {
@@ -121,4 +138,9 @@ uint32_t velocityToDEC(float velocity_mps) {
 
 void readActualSpeed() {
   sendCommand(ACTUAL_SPEED_DEC_ADDRESS, READ_COMMAND, 0x00000000); // 実速度を読み取るコマンドを送信
+}
+
+float calculateVelocityMPS(uint32_t dec) {
+    // ここに実際の変換ロジックを記述
+    return (dec * WHEEL_CIRCUMFERENCE_METERS) / (GEAR_RATIO * ENCODER_RESOLUTION);
 }
