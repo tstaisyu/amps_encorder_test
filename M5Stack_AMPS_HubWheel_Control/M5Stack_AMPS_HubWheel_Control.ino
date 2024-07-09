@@ -54,26 +54,34 @@ const int RX_PIN = 16; // RXピン
 const int TX_PIN = 17; // TXピン
 
 // オブジェクトアドレス
-const uint16_t OPERATION_MODE_ADDRESS = 0x7017;
-const uint16_t EMERGENCY_STOP_ADDRESS = 0x701F;
-const uint16_t CONTROL_WORD_ADDRESS = 0x7019;
-const uint16_t TARGET_VELOCITY_DEC_ADDRESS = 0x70B2;
-const uint16_t ACTUAL_SPEED_DEC_ADDRESS = 0x7077;
+constexpr uint16_t OPERATION_MODE_ADDRESS = 0x7017;
+constexpr uint16_t EMERGENCY_STOP_ADDRESS = 0x701F;
+constexpr uint16_t CONTROL_WORD_ADDRESS = 0x7019;
+constexpr uint16_t TARGET_VELOCITY_DEC_ADDRESS = 0x70B2;
+constexpr uint16_t ACTUAL_SPEED_DEC_ADDRESS = 0x7077;
 
 // コマンド定義
-const byte WRITE_COMMAND = 0x51;
-const byte READ_COMMAND = 0x52;
+constexpr byte WRITE_COMMAND = 0x51;
+constexpr byte READ_COMMAND = 0x52;
+constexpr byte READ_COMMAND = 0xA0;
 
 // デフォルト値
-const uint32_t OPERATION_MODE_SPEED_CONTROL = 0x00000003;
-const uint32_t DISABLE_EMERGENCY_STOP = 0x00000000;
-const uint32_t ENABLE_MOTOR = 0x0000000F;
-const uint32_t NO_DATA = 0x00000000;
+constexpr uint32_t OPERATION_MODE_SPEED_CONTROL = 0x00000003;
+constexpr uint32_t DISABLE_EMERGENCY_STOP = 0x00000000;
+constexpr uint32_t ENABLE_MOTOR = 0x0000000F;
+constexpr uint32_t NO_DATA = 0x00000000;
 
 // 通信設定
-const int BAUD_RATE = 115200;
-const byte MOTOR_ID = 0x01;
-const byte ERROR_BYTE = 0x00; // エラーバイトは必要に応じて調整
+constexpr int BAUD_RATE = 115200;
+constexpr byte MOTOR_ID = 0x01;
+constexpr byte ERROR_BYTE = 0x00; // エラーバイトは必要に応じて調整
+
+// ディレイ設定
+constexpr uint16_t COMMAND_DELAY = 100; // コマンド間のディレイ
+constexpr uint32_t SEND_INTERVAL = 1000; // 速度コマンドの送信間隔 (ミリ秒)
+
+// モーター仕様
+constexpr float WHEEL_DIAMETER = 0.11; // 車輪の直径 (メートル)
 
 double speed_ang = 0.0;
 double speed_lin = 0.0;
@@ -107,62 +115,29 @@ void subscription_callback(const void * msgin) {
   speed_ang = msg->angular.z;
 
   static unsigned long lastSendTime = 0;
-  const int sendInterval = 20; // ミリ秒単位でコマンド送信間隔
-  static int last_velocity_dec = 0; // 最後に送信した速度を保持する変数
+  static int lastVelocityDec = 0; // 最後に送信した速度を保持する変数
 
   static unsigned long lastUpdateTime = 0;
   const long updateInterval = 20; // 更新間隔を100ミリ秒に設定
 
-  // 新しいデータがあるか確認
   if (Serial.available() > 0) {
-    // 入力を読み取り、新しい速度があれば更新
-    float velocity_mps = Serial.parseFloat(); // 速度を読み取る
-    if (velocity_mps != 0) { // 0以外の値を受け取った場合のみ更新
-      int velocity_dec = velocityToDEC(velocity_mps); // m/sをDECに変換
-      sendVelocityDEC(velocity_dec); // 速度を送信
-      last_velocity_dec = velocity_dec; // 送信した速度を記録
-      lastSendTime = millis(); // 最後にコマンドを送信した時間を更新
-    }
+      float velocityMPS = Serial.parseFloat();
+      if (velocityMPS != 0) {
+          int velocityDec = velocityToDEC(velocityMPS);
+          sendVelocityDEC(velocityDec);
+          lastVelocityDec = velocityDec;
+          lastSendTime = millis();
+      }
   }
 
-  // 前回の送信から一定時間が経過したら、最後に設定した速度を再送
-  if (millis() - lastSendTime > sendInterval) {
-    sendVelocityDEC(last_velocity_dec); // 最後に受け取った速度を再送
-    lastSendTime = millis();
+  if (millis() - lastSendTime > SEND_INTERVAL) {
+      sendVelocityDEC(lastVelocityDec);
+      lastSendTime = millis();
   }
   
-  unsigned long currentTime = millis();
-  if (currentTime - lastUpdateTime > updateInterval) {
-    readActualSpeed();  // 実速度を読み取る
-    lastUpdateTime = currentTime;
-  }
-
-  // 受信データの処理
-  if (mySerial.available()) {
-    uint32_t receivedDec = 0;
-    int bytesToRead = sizeof(receivedDec);
-    if (mySerial.readBytes((char*)&receivedDec, bytesToRead) == bytesToRead) {
-      float velocity_mps = calculateVelocityMPS(receivedDec);
-      Serial.print("Velocity in mps: ");
-      Serial.println(velocity_mps, 3);  // 3桁の精度で表示
-    }
-  }
+  readSpeedData();
 
   delay(30); // 読み取り間隔を30ミリ秒に設定
-
-  // レスポンスを受信して表示
-  if (mySerial.available()) {
-    Serial.print("Received: ");
-    while (mySerial.available()) {
-      int receivedByte = mySerial.read();
-      if (receivedByte < 16) {
-        Serial.print("0"); // 1桁の場合、先頭に0を追加
-      }
-      Serial.print(receivedByte, HEX);
-      Serial.print(" ");
-    }
-    Serial.println();
-  }
 
 }
 
@@ -173,17 +148,7 @@ void setup() {
 
   Serial.println("Starting motor setup...");
 
-  // オペレーションモードを速度制御モードに設定
-  sendCommand(OPERATION_MODE_ADDRESS, WRITE_COMMAND, OPERATION_MODE_SPEED_CONTROL);
-  delay(100);
-
-  // エマージェンシーストップを解除
-  sendCommand(EMERGENCY_STOP_ADDRESS, WRITE_COMMAND, DISABLE_EMERGENCY_STOP);
-  delay(100);
-
-  // モーターを有効化
-  sendCommand(CONTROL_WORD_ADDRESS, WRITE_COMMAND, ENABLE_MOTOR);
-  delay(100);
+  initMotor(); 
 
   M5.begin();
   delay(500);
@@ -232,41 +197,52 @@ void loop() {
   }
 }
 
-void sendVelocityDEC(uint32_t velocity_dec) {
-  sendCommand(TARGET_VELOCITY_DEC_ADDRESS, WRITE_COMMAND, velocity_dec); // DECを設定
+void readSpeedData() {
+    sendCommand(ACTUAL_SPEED_HIGH_RES_ADDRESS, READ_COMMAND, 0);
+    while (mySerial.available() >= 10) {
+        uint8_t response[10];
+        mySerial.readBytes(response, 10);
+        if (response[0] == 0x01 && response[1] == 0xA4 && response[2] == 0x70 && response[3] == 0x77) {
+            int32_t receivedDec;
+            memcpy(&receivedDec, &response[5], sizeof(receivedDec));
+            receivedDec = reverseBytes(receivedDec);
+            float velocityMPS = calculateVelocityMPS(receivedDec);
+            Serial.print("Received DEC: ");
+            Serial.print(receivedDec);
+            Serial.print(" - Velocity in mps: ");
+            Serial.println(velocityMPS);
+        }
+    }
+}
+
+uint32_t reverseBytes(uint32_t value) {
+    return ((value & 0x000000FF) << 24) |
+           ((value & 0x0000FF00) << 8) |
+           ((value & 0x00FF0000) >> 8) |
+           ((value & 0xFF000000) >> 24);
+}
+
+float calculateVelocityMPS(int32_t dec) {
+    float wheelCircumference = WHEEL_DIAMETER * PI;
+    float rpm = (dec * 1875.0) / (512.0 * 4096);
+    return (rpm * wheelCircumference) / 60.0;
+}
+
+void sendVelocityDEC(uint32_t velocityDec) {
+  sendCommand(TARGET_VELOCITY_DEC_ADDRESS, WRITE_COMMAND, velocity_dec);
+}
+
+uint32_t velocityToDEC(float velocityMPS) {
+    float wheelCircumference = WHEEL_DIAMETER * PI;
+    float rpm = (velocityMPS * 60.0) / wheelCircumference;
+    return static_cast<uint32_t>((rpm * 512.0 * 4096.0) / 1875.0);
 }
 
 void sendCommand(uint16_t address, byte cmd, uint32_t data) {
-  byte addrH = highByte(address);
-  byte addrL = lowByte(address);
-  byte dataMSB = (data >> 24) & 0xFF;  // 最上位バイト
-  byte dataN1 = (data >> 16) & 0xFF;   // 2番目のバイト
-  byte dataN2 = (data >> 8) & 0xFF;    // 3番目のバイト
-  byte dataLSB = data & 0xFF;          // 最下位バイト
-
-  byte packet[] = {MOTOR_ID, cmd, addrH, addrL, ERROR_BYTE, dataMSB, dataN1, dataN2, dataLSB};
-  byte checksum = calculateChecksum(packet, sizeof(packet));
-
-  mySerial.write(packet, sizeof(packet)); // コマンドを送信
-  mySerial.write(checksum); // チェックサムを送信
-  Serial.print("Sent DEC: ");
-  Serial.println(data);
-  printPacket(packet, sizeof(packet), checksum);
-}
-
-void printPacket(byte *packet, int length, byte checksum) {
-  Serial.print("Sent: ");
-  for (int i = 0; i < length; i++) {
-    if (packet[i] < 16) {
-      Serial.print("0");
-    }
-    Serial.print(packet[i], HEX);
-    Serial.print(" ");
-  }
-  if (checksum < 16) {
-    Serial.print("0");
-  }
-  Serial.println(checksum, HEX);
+    byte packet[] = {MOTOR_ID, cmd, highByte(address), lowByte(address), ERROR_BYTE, (byte)(data >> 24), (byte)(data >> 16), (byte)(data >> 8), (byte)data};
+    byte checksum = calculateChecksum(packet, sizeof(packet));
+    mySerial.write(packet, sizeof(packet));
+    mySerial.write(checksum);
 }
 
 byte calculateChecksum(byte *data, int len) {
@@ -274,21 +250,5 @@ byte calculateChecksum(byte *data, int len) {
   for (int i = 0; i < len; i++) {
     sum += data[i];
   }
-  return sum & 0xFF; // チェックサム計算
-}
-
-uint32_t velocityToDEC(float velocity_mps) {
-    float wheel_circumference = 0.11f * 3.14159f; // 車輪の円周 = 直径 * π
-    float rpm = (velocity_mps * 60.0f) / wheel_circumference; // 1分間の回転数
-    uint32_t dec = static_cast<uint32_t>((rpm * 512.0f * 4096.0f) / 1875.0f); // DEC値の計算
-    return dec;
-    }
-
-void readActualSpeed() {
-  sendCommand(ACTUAL_SPEED_DEC_ADDRESS, READ_COMMAND, NO_DATA); // 実速度を読み取るコマンドを送信
-}
-
-float calculateVelocityMPS(uint32_t dec) {
-    // ここに実際の変換ロジックを記述
-    return (dec * WHEEL_CIRCUMFERENCE_METERS) / (GEAR_RATIO * ENCODER_RESOLUTION);
+  return sum & 0xFF;
 }
