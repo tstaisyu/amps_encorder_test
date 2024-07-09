@@ -63,7 +63,7 @@ constexpr uint16_t ACTUAL_SPEED_DEC_ADDRESS = 0x7077;
 // コマンド定義
 constexpr byte WRITE_COMMAND = 0x51;
 constexpr byte READ_COMMAND = 0x52;
-constexpr byte READ_COMMAND = 0xA0;
+constexpr byte READ_DEC_COMMAND = 0xA0;
 
 // デフォルト値
 constexpr uint32_t OPERATION_MODE_SPEED_CONTROL = 0x00000003;
@@ -82,6 +82,10 @@ constexpr uint32_t SEND_INTERVAL = 1000; // 速度コマンドの送信間隔 (�
 
 // モーター仕様
 constexpr float WHEEL_DIAMETER = 0.11; // 車輪の直径 (メートル)
+
+bool initial_data_received = false; // データ受信の有無を追跡
+unsigned long last_receive_time = 0; // 最後にデータを受信した時刻
+const unsigned long RECEIVE_TIMEOUT = 5000; // タイムアウト値を5000ミリ秒に設定
 
 double speed_ang = 0.0;
 double speed_lin = 0.0;
@@ -156,31 +160,8 @@ void setup() {
   M5.Lcd.setCursor(0, 0);  // ステータスメッセージの位置を設定
   M5.Lcd.print("micro ROS2 M5Stack START\n");  
 
-	// USB経由の場合
-	set_microros_transports();
+  setupMicroROS();
 
-//  delay(2000);
-
-  allocator = rcl_get_default_allocator();
-
-  RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
-
-	//init_options = rcl_get_zero_initialized_init_options();
-	//RCCHECK(rcl_init_options_init(&init_options, allocator));
-	//RCCHECK(rcl_init_options_set_domain_id(&init_options, domain_id));		// ドメインIDの設定
-	//RCCHECK(rclc_support_init_with_options(&support, 0, NULL, &init_options, &allocator)); // 前のrclc_support_initは削除する
-  RCCHECK(rclc_node_init_default(&node, "subscriber_node", "", &support));
-
-  RCCHECK(rclc_subscription_init_best_effort(
-    &subscriber,
-    &node,
-    ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
-    "/cmd_vel"));
-
-	int callback_size = 1;	// コールバックを行う数
-//	executor = rclc_executor_get_zero_initialized_executor();
-  RCCHECK(rclc_executor_init(&executor, &support.context, callback_size, &allocator));
-  RCCHECK(rclc_executor_add_subscription(&executor, &subscriber, &msg, &subscription_callback, ON_NEW_DATA));
 }
 
 void loop() {
@@ -197,8 +178,37 @@ void loop() {
   }
 }
 
+void setupMicroROS() {
+	set_microros_transports();
+  allocator = rcl_get_default_allocator();
+  RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
+	//init_options = rcl_get_zero_initialized_init_options();
+	//RCCHECK(rcl_init_options_init(&init_options, allocator));
+	//RCCHECK(rcl_init_options_set_domain_id(&init_options, domain_id));		// ドメインIDの設定
+	//RCCHECK(rclc_support_init_with_options(&support, 0, NULL, &init_options, &allocator)); // 前のrclc_support_initは削除する
+  RCCHECK(rclc_node_init_default(&node, "subscriber_node", "", &support));
+  RCCHECK(rclc_subscription_init_best_effort(
+    &subscriber,
+    &node,
+    ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
+    "/cmd_vel"));
+	int callback_size = 1;	// コールバックを行う数
+//	executor = rclc_executor_get_zero_initialized_executor();
+  RCCHECK(rclc_executor_init(&executor, &support.context, callback_size, &allocator));
+  RCCHECK(rclc_executor_add_subscription(&executor, &subscriber, &msg, &subscription_callback, ON_NEW_DATA));
+}
+
+void initMotor() {
+    sendCommand(OPERATION_MODE_ADDRESS, WRITE_COMMAND, OPERATION_MODE_SPEED_CONTROL);
+    delay(COMMAND_DELAY);
+    sendCommand(EMERGENCY_STOP_ADDRESS, WRITE_COMMAND, DISABLE_EMERGENCY_STOP);
+    delay(COMMAND_DELAY);
+    sendCommand(CONTROL_WORD_ADDRESS, WRITE_COMMAND, ENABLE_MOTOR);
+    delay(COMMAND_DELAY);
+}
+
 void readSpeedData() {
-    sendCommand(ACTUAL_SPEED_HIGH_RES_ADDRESS, READ_COMMAND, 0);
+    sendCommand(ACTUAL_SPEED_DEC_ADDRESS, READ_DEC_COMMAND, 0);
     while (mySerial.available() >= 10) {
         uint8_t response[10];
         mySerial.readBytes(response, 10);
@@ -229,7 +239,7 @@ float calculateVelocityMPS(int32_t dec) {
 }
 
 void sendVelocityDEC(uint32_t velocityDec) {
-  sendCommand(TARGET_VELOCITY_DEC_ADDRESS, WRITE_COMMAND, velocity_dec);
+  sendCommand(TARGET_VELOCITY_DEC_ADDRESS, WRITE_COMMAND, velocityDec);
 }
 
 uint32_t velocityToDEC(float velocityMPS) {
