@@ -16,19 +16,17 @@
 #include "BluetoothSerial.h"
 #include <micro_ros_arduino.h>
 #include <HardwareSerial.h>
-
 #include <M5Stack.h>
 #include <stdio.h>
+#include <string.h>
+#include <cmath>
 #include <rcl/rcl.h>
 #include <rcl/error_handling.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
-
+#include "rcutils/time.h"
 #include <geometry_msgs/msg/twist.h>
-
-#include "CytronMotorDriver.h"
-
-#include "esp32-hal-timer.h"
+#include <nav_msgs/msg/odometry.h>
 
 class MotorController {
 private:
@@ -47,14 +45,19 @@ struct VelocityCommand {
   float angular_z;
 };
 
-byte MOTOR_RIGHT_ID = 0x01;
-byte MOTOR_LEFT_ID = 0x02;
+// グローバル変数で現在の位置と姿勢を保持
+double x_position = 0.0;
+double y_position = 0.0;
+double theta = 0.0; // ロボットの向き（ラジアン）
+
+constexpr byte MOTOR_RIGHT_ID = 0x01;
+constexpr byte MOTOR_LEFT_ID = 0x02;
 
 // UARTピン設定
-const int RX_PIN_1 = 25; // UART1のRXピン
-const int TX_PIN_1 = 26; // UART1のTXピン
-const int RX_PIN_2 = 16; // UART2のRXピン
-const int TX_PIN_2 = 17; // UART2のTXピン
+constexpr int RX_PIN_1 = 25; // UART1のRXピン
+constexpr int TX_PIN_1 = 26; // UART1のTXピン
+constexpr int RX_PIN_2 = 16; // UART2のRXピン
+constexpr int TX_PIN_2 = 17; // UART2のTXピン
 
 // オブジェクトアドレス
 constexpr uint16_t OPERATION_MODE_ADDRESS = 0x7017;
@@ -84,7 +87,7 @@ constexpr uint16_t COMMAND_DELAY = 100; // コマンド間のディレイ
 constexpr uint32_t SEND_INTERVAL = 1000; // 速度コマンドの送信間隔 (ミリ秒)
 
 // モーター仕様
-constexpr float WHEEL_DIAMETER = 0.11; // 車輪の直径 (メートル)
+constexpr float WHEEL_RADIUS = 0.055; // 車輪の直径 (メートル)
 constexpr float WHEEL_DISTANCE = 0.30; // ホイール間の距離を設定 (メートル)
 
 bool initial_data_received = false; // データ受信の有無を追跡
@@ -102,6 +105,8 @@ VelocityCommand currentCommand;
 
 rcl_subscription_t subscriber;
 geometry_msgs__msg__Twist msg;
+rcl_publisher_t odom_publisher;
+nav_msgs__msg__Odometry odom_msg;
 rclc_executor_t executor;
 rclc_support_t support;
 rcl_allocator_t allocator;
@@ -128,13 +133,7 @@ void subscription_callback(const void * msgin) {
   float rightWheelSpeed = readSpeedData(rightMotorSerial, MOTOR_RIGHT_ID);
   float leftWheelSpeed = readSpeedData(leftMotorSerial, MOTOR_LEFT_ID);
 
-  float linearVelocity, angularVelocity;
-  calculateOverallVelocity(rightWheelSpeed, leftWheelSpeed, linearVelocity, angularVelocity);
-
-  Serial.print("Linear Velocity: ");
-  Serial.print(linearVelocity);
-  Serial.print(", Angular Velocity: ");
-  Serial.println(angularVelocity);
+  updateOdometry(rightWheelSpeed, leftWheelSpeed); // オドメトリの更新
 
   delay(30); // 読み取り間隔を30ミリ秒に設定
 }
@@ -191,6 +190,12 @@ void setupMicroROS() {
 //	executor = rclc_executor_get_zero_initialized_executor();
   RCCHECK(rclc_executor_init(&executor, &support.context, callback_size, &allocator));
   RCCHECK(rclc_executor_add_subscription(&executor, &subscriber, &msg, &subscription_callback, ON_NEW_DATA));
+  RCCHECK(rclc_publisher_init_best_effort(
+      &odom_publisher,
+      &node,
+      ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry),
+      "/odom"
+  ));
 }
 
 void logReceivedData(const geometry_msgs__msg__Twist *msg) {
@@ -223,9 +228,67 @@ void initMotor(HardwareSerial& serial, byte motorID) {
     delay(COMMAND_DELAY);
 }
 
-void calculateOverallVelocity(float rightWheelSpeed, float leftWheelSpeed, float& linearVelocity, float& angularVelocity) {
-    linearVelocity = (rightWheelSpeed + leftWheelSpeed) / 2;
-    angularVelocity = (rightWheelSpeed - leftWheelSpeed) / WHEEL_DISTANCE;
+void updateOdometry(float rightWheelSpeed, float leftWheelSpeed) {
+    static unsigned long last_encoder_receive_time = 0;
+    unsigned long current_time = millis();
+    double dt = (current_time - last_encoder_receive_time) / 1000.0;
+    last_encoder_receive_time = current_time;
+
+    // 左右の車輪の速度を計算
+    double v_right = rightWheelSpeed * WHEEL_RADIUS;
+    double v_left = leftWheelSpeed * WHEEL_RADIUS;
+
+    // 中心線上の速度と角速度を計算
+    double v = (v_right + v_left) / 2.0;
+    double omega = (v_right - v_left) / WHEEL_DISTANCE;
+
+    // 新しい位置と姿勢を計算
+    x_position += v * cos(theta) * dt;
+    y_position += v * sin(theta) * dt;
+    theta += omega * dt;
+
+    prepareAndPublishOdometry(x_position, y_position, theta, v, omega);
+}
+
+void prepareAndPublishOdometry(double x, double y, double theta, double linear_velocity, double angular_velocity) {
+    nav_msgs__msg__Odometry odom_msg;
+
+    // 現在のROS 2タイムスタンプを取得
+    rcutils_time_point_value_t now;
+    rcutils_system_time_now(&now);
+
+    odom_msg.header.stamp.sec = now / 1000000000LL; // 秒単位に変換
+    odom_msg.header.stamp.nanosec = now % 1000000000LL; // 余りがナノ秒
+
+    // 文字列フィールドに値を直接設定
+    const char* frame_id = "odom";
+    const char* child_frame_id = "base_link";
+
+    strncpy(odom_msg.header.frame_id.data, frame_id, sizeof(odom_msg.header.frame_id.data));
+    odom_msg.header.frame_id.size = strlen(frame_id);
+
+    strncpy(odom_msg.child_frame_id.data, child_frame_id, sizeof(odom_msg.child_frame_id.data));
+    odom_msg.child_frame_id.size = strlen(child_frame_id);
+
+    odom_msg.pose.pose.position.x = x;
+    odom_msg.pose.pose.position.y = y;
+    // Z軸は0として、2Dナビゲーションを想定
+    odom_msg.pose.pose.position.z = 0.0;
+
+    setQuaternionFromYaw(theta, &odom_msg.pose.pose.orientation);
+
+    odom_msg.twist.twist.linear.x = linear_velocity;
+    odom_msg.twist.twist.angular.z = angular_velocity;
+
+    // オドメトリのメッセージをパブリッシュ
+    RCCHECK(rcl_publish(&odom_publisher, &odom_msg, NULL));
+}
+
+void setQuaternionFromYaw(double yaw, geometry_msgs__msg__Quaternion *orientation) {
+    orientation->x = 0.0;
+    orientation->y = 0.0;
+    orientation->z = sin(yaw / 2);
+    orientation->w = cos(yaw / 2);
 }
 
 float readSpeedData(HardwareSerial& serial, byte motorID) {
@@ -259,7 +322,7 @@ uint32_t reverseBytes(uint32_t value) {
 }
 
 float calculateVelocityMPS(int32_t dec) {
-    float wheelCircumference = WHEEL_DIAMETER * PI;
+    float wheelCircumference = WHEEL_RADIUS * 2 * PI;
     float rpm = (dec * 1875.0) / (512.0 * 4096);
     return (rpm * wheelCircumference) / 60.0;
 }
@@ -282,7 +345,7 @@ void sendVelocityDEC(HardwareSerial& serial, int velocityDec, byte motorID) {
 }
 
 uint32_t velocityToDEC(float velocityMPS) {
-    float wheelCircumference = WHEEL_DIAMETER * PI;
+    float wheelCircumference = WHEEL_RADIUS * 2 * PI;
     float rpm = (velocityMPS * 60.0) / wheelCircumference;
     return static_cast<uint32_t>((rpm * 512.0 * 4096.0) / 1875.0);
 }
