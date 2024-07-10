@@ -246,7 +246,8 @@ float readSpeedData(HardwareSerial& serial, byte motorID) {
     while (serial.available() >= 10) {
         uint8_t response[10];
         serial.readBytes(response, 10);
-        if (response[0] == motorID && response[1] == READ_DEC_SUCCESS && response[2] == 0x70 && response[3] == 0x77) {
+        uint16_t responseAddress = ((uint16_t)response[2] << 8) | response[3];
+        if (response[0] == motorID && response[1] == READ_DEC_SUCCESS && responseAddress == ACTUAL_SPEED_DEC_ADDRESS) {
             int32_t receivedDec;
             memcpy(&receivedDec, &response[5], sizeof(receivedDec));
             receivedDec = reverseBytes(receivedDec);
