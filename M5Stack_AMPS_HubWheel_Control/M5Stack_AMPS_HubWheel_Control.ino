@@ -87,7 +87,7 @@ constexpr uint16_t COMMAND_DELAY = 100; // コマンド間のディレイ
 constexpr uint32_t SEND_INTERVAL = 1000; // 速度コマンドの送信間隔 (ミリ秒)
 
 // モーター仕様
-constexpr float WHEEL_RADIUS = 0.055; // 車輪の直径 (メートル)
+constexpr float WHEEL_RADIUS = 0.055; // 車輪の半径 (メートル)
 constexpr float WHEEL_DISTANCE = 0.30; // ホイール間の距離を設定 (メートル)
 
 bool initial_data_received = false; // データ受信の有無を追跡
