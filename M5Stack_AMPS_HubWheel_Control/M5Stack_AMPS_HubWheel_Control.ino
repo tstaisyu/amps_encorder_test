@@ -116,34 +116,13 @@ rcl_timer_t timer;
 
 void subscription_callback(const void * msgin) {
 
-  double speed_ang = 0.0;
-  double speed_lin = 0.0;
-
-  M5.Lcd.setCursor(0, 20);  
-  M5.Lcd.println("Callback triggered");
+  const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
   if (!initial_data_received) {
     initial_data_received = true;
   }
-  const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
-
-  // 受信したメッセージの内容をシリアルポート経由で出力
-  Serial.print("Received linear.x: ");
-  Serial.println(msg->linear.x);
-  Serial.print("Received angular.z: ");
-  Serial.println(msg->angular.z);
-
-  M5.Lcd.clear();  // LCD画面をクリア
-  M5.Lcd.setCursor(0, 20);  // テキスト表示位置を設定
-  M5.Lcd.print("Callback triggered");
-
-  M5.Lcd.setCursor(0, 40);
-  M5.Lcd.print("Linear.x: ");
-  M5.Lcd.println(msg->linear.x);
-
-  M5.Lcd.setCursor(0, 60);
-  M5.Lcd.print("Angular.z: ");
-  M5.Lcd.println(msg->angular.z);
-
+  
+  updateDisplay(msg);
+  logReceivedData(msg);
   sendMotorCommands(msg->linear.x, msg->angular.z);
 
   float rightWheelSpeed = readSpeedData(rightMotorSerial, MOTOR_RIGHT_ID);
@@ -158,7 +137,6 @@ void subscription_callback(const void * msgin) {
   Serial.println(angularVelocity);
 
   delay(30); // 読み取り間隔を30ミリ秒に設定
-
 }
 
 void setup() {
@@ -214,6 +192,27 @@ void setupMicroROS() {
 //	executor = rclc_executor_get_zero_initialized_executor();
   RCCHECK(rclc_executor_init(&executor, &support.context, callback_size, &allocator));
   RCCHECK(rclc_executor_add_subscription(&executor, &subscriber, &msg, &subscription_callback, ON_NEW_DATA));
+}
+
+void logReceivedData(const geometry_msgs__msg__Twist *msg) {
+  Serial.print("Received linear.x: ");
+  Serial.println(msg->linear.x);
+  Serial.print("Received angular.z: ");
+  Serial.println(msg->angular.z);
+}
+
+void updateDisplay(const geometry_msgs__msg__Twist *msg) {
+  M5.Lcd.clear();  // LCD画面をクリア
+  M5.Lcd.setCursor(0, 20);  // テキスト表示位置を設定
+  M5.Lcd.print("Callback triggered");
+
+  M5.Lcd.setCursor(0, 40);
+  M5.Lcd.print("Linear.x: ");
+  M5.Lcd.println(msg->linear.x);
+
+  M5.Lcd.setCursor(0, 60);
+  M5.Lcd.print("Angular.z: ");
+  M5.Lcd.println(msg->angular.z);
 }
 
 void initMotor(HardwareSerial& serial, byte motorID) {
