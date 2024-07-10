@@ -114,11 +114,11 @@ rcl_timer_t timer;
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if ((temp_rc != RCL_RET_OK)) {Serial.println("Error in " #fn); return;}}
 #define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
 
-double speed_ang = 0.0;
-double speed_lin = 0.0;
-
 void subscription_callback(const void * msgin) {
-  M5.Speaker.begin();
+
+  double speed_ang = 0.0;
+  double speed_lin = 0.0;
+
   M5.Lcd.setCursor(0, 20);  
   M5.Lcd.println("Callback triggered");
   const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
@@ -141,21 +141,7 @@ void subscription_callback(const void * msgin) {
   M5.Lcd.print("Angular.z: ");
   M5.Lcd.println(msg->angular.z);
 
-  // 速度と角速度を取得
-  speed_lin = msg->linear.x;
-  speed_ang = msg->angular.z;
-
-  static unsigned long lastSendTime = 0;
-
-  if (updateVelocity()) {
-    sendMotorCommands(currentCommand.linear_x, currentCommand.angular_z);
-    lastSendTime = millis();
-  }
-
-  if (millis() - lastSendTime > SEND_INTERVAL) {
-    sendMotorCommands(currentCommand.linear_x, currentCommand.angular_z); // 最後のコマンドを再送
-    lastSendTime = millis();
-  }
+  sendMotorCommands(msg->linear.x, msg->angular.z);
 
   float rightWheelSpeed = readSpeedData(rightMotorSerial, MOTOR_RIGHT_ID);
   float leftWheelSpeed = readSpeedData(leftMotorSerial, MOTOR_LEFT_ID);
@@ -275,21 +261,6 @@ float calculateVelocityMPS(int32_t dec) {
     float wheelCircumference = WHEEL_DIAMETER * PI;
     float rpm = (dec * 1875.0) / (512.0 * 4096);
     return (rpm * wheelCircumference) / 60.0;
-}
-
-bool updateVelocity() {
-  if (Serial.available()) {
-    String input = Serial.readStringUntil('\n');
-    int separator = input.indexOf(',');
-    if (separator != -1) {
-      String linearStr = input.substring(0, separator);
-      String angularStr = input.substring(separator + 1);
-      currentCommand.linear_x = linearStr.toFloat();
-      currentCommand.angular_z = angularStr.toFloat();
-      return true; // 成功した場合
-    }
-  }
-  return false; // データが正しくない場合
 }
 
 void sendMotorCommands(float linearVelocity, float angularVelocity) {
