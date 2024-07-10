@@ -121,6 +121,9 @@ void subscription_callback(const void * msgin) {
 
   M5.Lcd.setCursor(0, 20);  
   M5.Lcd.println("Callback triggered");
+  if (!initial_data_received) {
+    initial_data_received = true;
+  }
   const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
 
   // 受信したメッセージの内容をシリアルポート経由で出力
