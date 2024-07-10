@@ -157,7 +157,6 @@ void setup() {
   M5.Lcd.print("micro ROS2 M5Stack START\n");  
 
   setupMicroROS();
-
 }
 
 void loop() {
