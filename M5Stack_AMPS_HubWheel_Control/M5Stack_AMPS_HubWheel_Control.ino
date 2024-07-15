@@ -50,12 +50,12 @@ double x_position = 0.0;
 double y_position = 0.0;
 double theta = 0.0; // ロボットの向き（ラジアン）
 
-constexpr byte MOTOR_RIGHT_ID = 0x01;
-constexpr byte MOTOR_LEFT_ID = 0x02;
+constexpr byte MOTOR_RIGHT_ID = 0x02;
+constexpr byte MOTOR_LEFT_ID = 0x01;
 
 // UARTピン設定
-constexpr int RX_PIN_1 = 25; // UART1のRXピン
-constexpr int TX_PIN_1 = 26; // UART1のTXピン
+constexpr int RX_PIN_1 = 21; // UART1のRXピン
+constexpr int TX_PIN_1 = 22; // UART1のTXピン
 constexpr int RX_PIN_2 = 16; // UART2のRXピン
 constexpr int TX_PIN_2 = 17; // UART2のTXピン
 
@@ -67,7 +67,8 @@ constexpr uint16_t TARGET_VELOCITY_DEC_ADDRESS = 0x70B2;
 constexpr uint16_t ACTUAL_SPEED_DEC_ADDRESS = 0x7077;
 
 // コマンド定義
-constexpr byte MOTOR_INIT_COMMAND = 0x51;
+constexpr byte MOTOR_SETUP_COMMAND = 0x51;
+constexpr byte MOTOR_ENABLE_COMMAND = 0x52;
 constexpr byte VEL_SEND_COMMAND = 0x54;
 constexpr byte READ_COMMAND = 0x52;
 constexpr byte READ_DEC_COMMAND = 0xA0;
@@ -222,11 +223,11 @@ void updateDisplay(const geometry_msgs__msg__Twist *msg) {
 }
 
 void initMotor(HardwareSerial& serial, byte motorID) {
-    motorController.sendCommand(motorID, OPERATION_MODE_ADDRESS, MOTOR_INIT_COMMAND, OPERATION_MODE_SPEED_CONTROL);
+    motorController.sendCommand(motorID, OPERATION_MODE_ADDRESS, MOTOR_SETUP_COMMAND, OPERATION_MODE_SPEED_CONTROL);
     delay(COMMAND_DELAY);
-    motorController.sendCommand(motorID, EMERGENCY_STOP_ADDRESS, MOTOR_INIT_COMMAND, DISABLE_EMERGENCY_STOP);
+    motorController.sendCommand(motorID, EMERGENCY_STOP_ADDRESS, MOTOR_SETUP_COMMAND, DISABLE_EMERGENCY_STOP);
     delay(COMMAND_DELAY);
-    motorController.sendCommand(motorID, CONTROL_WORD_ADDRESS, MOTOR_INIT_COMMAND, ENABLE_MOTOR);
+    motorController.sendCommand(motorID, CONTROL_WORD_ADDRESS, MOTOR_ENABLE_COMMAND, ENABLE_MOTOR);
     delay(COMMAND_DELAY);
 }
 
