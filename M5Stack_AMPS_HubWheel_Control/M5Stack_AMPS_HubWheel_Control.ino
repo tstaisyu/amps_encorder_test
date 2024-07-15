@@ -157,6 +157,7 @@ void setup() {
   M5.Lcd.print("micro ROS2 M5Stack START\n");  
 
   setupMicroROS();
+  last_receive_time = millis();  
 }
 
 void loop() {
