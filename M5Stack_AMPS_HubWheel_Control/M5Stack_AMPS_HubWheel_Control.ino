@@ -122,6 +122,7 @@ rcl_timer_t timer;
 void subscription_callback(const void * msgin) {
 
   const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
+  last_receive_time = millis();
   if (!initial_data_received) {
     initial_data_received = true;
   }
