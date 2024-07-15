@@ -67,7 +67,8 @@ constexpr uint16_t TARGET_VELOCITY_DEC_ADDRESS = 0x70B2;
 constexpr uint16_t ACTUAL_SPEED_DEC_ADDRESS = 0x7077;
 
 // コマンド定義
-constexpr byte WRITE_COMMAND = 0x51;
+constexpr byte MOTOR_INIT_COMMAND = 0x51;
+constexpr byte VEL_SEND_COMMAND = 0x54;
 constexpr byte READ_COMMAND = 0x52;
 constexpr byte READ_DEC_COMMAND = 0xA0;
 constexpr byte READ_DEC_SUCCESS = 0xA4;
@@ -92,7 +93,7 @@ constexpr float WHEEL_DISTANCE = 0.30; // ホイール間の距離を設定 (メ
 
 bool initial_data_received = false; // データ受信の有無を追跡
 unsigned long last_receive_time = 0; // 最後にデータを受信した時刻
-const unsigned long RECEIVE_TIMEOUT = 5000; // タイムアウト値を5000ミリ秒に設定
+#define RECEIVE_TIMEOUT 5000 // タイムアウト値を5000ミリ秒に設定
 
 BluetoothSerial SerialBT;
 
@@ -136,7 +137,6 @@ void subscription_callback(const void * msgin) {
 
   updateOdometry(rightWheelSpeed, leftWheelSpeed); // オドメトリの更新
 
-  delay(30); // 読み取り間隔を30ミリ秒に設定
 }
 
 void setup() {
@@ -222,11 +222,11 @@ void updateDisplay(const geometry_msgs__msg__Twist *msg) {
 }
 
 void initMotor(HardwareSerial& serial, byte motorID) {
-    motorController.sendCommand(motorID, OPERATION_MODE_ADDRESS, WRITE_COMMAND, OPERATION_MODE_SPEED_CONTROL);
+    motorController.sendCommand(motorID, OPERATION_MODE_ADDRESS, MOTOR_INIT_COMMAND, OPERATION_MODE_SPEED_CONTROL);
     delay(COMMAND_DELAY);
-    motorController.sendCommand(motorID, EMERGENCY_STOP_ADDRESS, WRITE_COMMAND, DISABLE_EMERGENCY_STOP);
+    motorController.sendCommand(motorID, EMERGENCY_STOP_ADDRESS, MOTOR_INIT_COMMAND, DISABLE_EMERGENCY_STOP);
     delay(COMMAND_DELAY);
-    motorController.sendCommand(motorID, CONTROL_WORD_ADDRESS, WRITE_COMMAND, ENABLE_MOTOR);
+    motorController.sendCommand(motorID, CONTROL_WORD_ADDRESS, MOTOR_INIT_COMMAND, ENABLE_MOTOR);
     delay(COMMAND_DELAY);
 }
 
@@ -266,12 +266,12 @@ void prepareAndPublishOdometry(double x, double y, double theta, double linear_v
     const char* frame_id = "odom";
     const char* child_frame_id = "base_link";
 
-    strncpy(odom_msg.header.frame_id.data, frame_id, sizeof(odom_msg.header.frame_id.data));
+/*    strncpy(odom_msg.header.frame_id.data, frame_id, sizeof(odom_msg.header.frame_id.data));
     odom_msg.header.frame_id.size = strlen(frame_id);
 
     strncpy(odom_msg.child_frame_id.data, child_frame_id, sizeof(odom_msg.child_frame_id.data));
     odom_msg.child_frame_id.size = strlen(child_frame_id);
-
+*/
     odom_msg.pose.pose.position.x = x;
     odom_msg.pose.pose.position.y = y;
     // Z軸は0として、2Dナビゲーションを想定
@@ -343,7 +343,7 @@ void sendMotorCommands(float linearVelocity, float angularVelocity) {
 }
 
 void sendVelocityDEC(HardwareSerial& serial, int velocityDec, byte motorID) {
-  motorController.sendCommand(motorID, TARGET_VELOCITY_DEC_ADDRESS, WRITE_COMMAND, velocityDec);
+  motorController.sendCommand(motorID, TARGET_VELOCITY_DEC_ADDRESS, VEL_SEND_COMMAND, velocityDec);
 }
 
 uint32_t velocityToDEC(float velocityMPS) {
@@ -358,6 +358,32 @@ void MotorController::sendCommand(byte motorID, uint16_t address, byte command, 
     for (int i = 0; i < sizeof(packet); i++) {
         checksum += packet[i];
     }
+    
+    // 条件に基づいて特定のバイトが特定の値の場合にのみパケット全体を表示
+    if ((packet[1] == 0x54 && packet[3] == 0xB2)) {
+        M5.Lcd.setCursor(0, 80);
+        M5.Lcd.print("Packet: ");
+        for (int i = 0; i < sizeof(packet); i++) {
+            M5.Lcd.printf("%02X ", packet[i]);
+        }
+        M5.Lcd.println();
+        M5.Lcd.setCursor(0, 120);
+        M5.Lcd.printf("Checksum: %02X", checksum);
+        M5.Lcd.println();
+    }
+
+    if ((packet[1] == 0x64 && packet[3] == 0xB2)) {
+        M5.Lcd.setCursor(0, 140);
+        M5.Lcd.print("Packet: ");
+        for (int i = 0; i < sizeof(packet); i++) {
+            M5.Lcd.printf("%02X ", packet[i]);
+        }
+        M5.Lcd.println();
+        M5.Lcd.setCursor(0, 180);
+        M5.Lcd.printf("Checksum: %02X", checksum);
+        M5.Lcd.println();
+    }
+
     if (motorID == MOTOR_RIGHT_ID) {
         rightMotorSerial.write(packet, sizeof(packet));
         rightMotorSerial.write(checksum);
