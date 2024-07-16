@@ -50,14 +50,14 @@ double x_position = 0.0;
 double y_position = 0.0;
 double theta = 0.0; // ロボットの向き（ラジアン）
 
-constexpr byte MOTOR_RIGHT_ID = 0x01;
-constexpr byte MOTOR_LEFT_ID = 0x02;
+constexpr byte MOTOR_RIGHT_ID = 0x02;
+constexpr byte MOTOR_LEFT_ID = 0x01;
 
 // UARTピン設定
-constexpr int RX_PIN_1 = 16; // UART1のRXピン
-constexpr int TX_PIN_1 = 17; // UART1のTXピン
-constexpr int RX_PIN_2 = 25; // UART2のRXピン
-constexpr int TX_PIN_2 = 26; // UART2のTXピン
+constexpr int RX_PIN_1 = 21; // UART1のRXピン
+constexpr int TX_PIN_1 = 22; // UART1のTXピン
+constexpr int RX_PIN_2 = 16; // UART2のRXピン
+constexpr int TX_PIN_2 = 17; // UART2のTXピン
 
 // オブジェクトアドレス
 constexpr uint16_t OPERATION_MODE_ADDRESS = 0x7017;
@@ -98,8 +98,8 @@ unsigned long last_receive_time = 0; // 最後にデータを受信した時刻
 
 BluetoothSerial SerialBT;
 
-HardwareSerial rightMotorSerial(2); // UART1, 右ホイール用
-HardwareSerial leftMotorSerial(1); // UART2, 左ホイール用
+HardwareSerial rightMotorSerial(1); // UART1, 右ホイール用
+HardwareSerial leftMotorSerial(2); // UART2, 左ホイール用
 
 MotorController motorController(rightMotorSerial, leftMotorSerial);
 
@@ -340,7 +340,7 @@ void sendMotorCommands(float linearVelocity, float angularVelocity) {
 
     // 右輪と左輪に速度指令を送信
   sendVelocityDEC(rightMotorSerial, rightWheelDec, MOTOR_RIGHT_ID);
-//  sendVelocityDEC(leftMotorSerial, leftWheelDec, MOTOR_LEFT_ID);
+  sendVelocityDEC(leftMotorSerial, leftWheelDec, MOTOR_LEFT_ID);
 }
 
 void sendVelocityDEC(HardwareSerial& serial, int velocityDec, byte motorID) {

@@ -332,14 +332,14 @@ float calculateVelocityMPS(int32_t dec) {
 
 void sendMotorCommands(float linearVelocity, float angularVelocity) {
   // ここで左右のホイールの速度を計算
-  float rightWheelSpeed = linearVelocity + (WHEEL_DISTANCE * angularVelocity / 2);
-  float leftWheelSpeed = linearVelocity - (WHEEL_DISTANCE * angularVelocity / 2);
+  float rightWheelSpeed = (-1) * (linearVelocity + (WHEEL_DISTANCE * angularVelocity / 2));
+  float leftWheelSpeed = (-1) * (linearVelocity - (WHEEL_DISTANCE * angularVelocity / 2));
 
   int rightWheelDec = velocityToDEC(rightWheelSpeed);
   int leftWheelDec = velocityToDEC(leftWheelSpeed);
 
     // 右輪と左輪に速度指令を送信
-//  sendVelocityDEC(rightMotorSerial, rightWheelDec, MOTOR_RIGHT_ID);
+  sendVelocityDEC(rightMotorSerial, rightWheelDec, MOTOR_RIGHT_ID);
   sendVelocityDEC(leftMotorSerial, leftWheelDec, MOTOR_LEFT_ID);
 }
 
