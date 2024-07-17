@@ -90,7 +90,7 @@ constexpr uint32_t SEND_INTERVAL = 1000; // 速度コマンドの送信間隔 (�
 
 // モーター仕様
 constexpr float WHEEL_RADIUS = 0.055; // 車輪の半径 (メートル)
-constexpr float WHEEL_DISTANCE = 0.30; // ホイール間の距離を設定 (メートル)
+constexpr float WHEEL_DISTANCE = 0.202; // ホイール間の距離を設定 (メートル)
 
 bool initial_data_received = false; // データ受信の有無を追跡
 unsigned long last_receive_time = 0; // 最後にデータを受信した時刻
@@ -106,8 +106,9 @@ MotorController motorController(rightMotorSerial, leftMotorSerial);
 VelocityCommand currentCommand;
 
 rcl_subscription_t subscriber;
-geometry_msgs__msg__Twist msg;
-rcl_publisher_t odom_publisher;
+geometry_msgs__msg__Twist msg_sub;
+geometry_msgs__msg__Twist msg_pub;
+rcl_publisher_t vel_publisher;
 nav_msgs__msg__Odometry odom_msg;
 rclc_executor_t executor;
 rclc_support_t support;
@@ -117,26 +118,25 @@ rcl_timer_t timer;
 
 //rcl_init_options_t init_options; // Humble
 //size_t domain_id = 117;
+unsigned long lastReadTime = 0;
+const unsigned int readInterval = 40; 
 
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if ((temp_rc != RCL_RET_OK)) {Serial.println("Error in " #fn); return;}}
 #define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
 
 void subscription_callback(const void * msgin) {
 
-  const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
+  const geometry_msgs__msg__Twist * msg_sub = (const geometry_msgs__msg__Twist *)msgin;
   last_receive_time = millis();
   if (!initial_data_received) {
     initial_data_received = true;
   }
   
-  updateDisplay(msg);
-  logReceivedData(msg);
-  sendMotorCommands(msg->linear.x, msg->angular.z);
+  updateDisplay(msg_sub);
+//  logReceivedData(msg_sub);
+  sendMotorCommands(msg_sub->linear.x, msg_sub->angular.z);
 
-  float rightWheelSpeed = readSpeedData(rightMotorSerial, MOTOR_RIGHT_ID);
-  float leftWheelSpeed = readSpeedData(leftMotorSerial, MOTOR_LEFT_ID);
-
-  updateOdometry(rightWheelSpeed, leftWheelSpeed); // オドメトリの更新
+//  updateOdometry(rightWheelSpeed, leftWheelSpeed); // オドメトリの更新
 
 }
 
@@ -162,17 +162,36 @@ void setup() {
 }
 
 void loop() {
-  RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100)));
+
+  unsigned long currentMillis = millis();
+
+  // データのパブリッシュ処理
+  if (currentMillis - lastReadTime >= readInterval) {
+    publishSpeedData();
+    lastReadTime = currentMillis;
+  }
+
+  RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10)));
   if (!initial_data_received && (millis() - last_receive_time > RECEIVE_TIMEOUT)) {
     Serial.printf("No data received for %d seconds, restarting...\n", RECEIVE_TIMEOUT / 1000);
     ESP.restart();
   }
-  delay(100);
   if (rcl_error_is_set()) {
     RCL_SET_ERROR_MSG("rclc_executor_spin_some failed");
     printf("Error in rclc_executor_spin_some: %s\n", rcl_get_error_string().str);
     rcl_reset_error();
   }
+}
+
+void publishSpeedData() {
+
+  float leftWheelSpeed = readSpeedData(leftMotorSerial, MOTOR_LEFT_ID);
+
+  msg_pub.linear.x = (-1) * leftWheelSpeed;
+
+  // データをパブリッシュ
+  rcl_publish(&vel_publisher, &msg_pub, NULL);
+
 }
 
 void setupMicroROS() {
@@ -189,16 +208,19 @@ void setupMicroROS() {
     &node,
     ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
     "/cmd_vel"));
+
+  RCCHECK(rclc_publisher_init_best_effort(
+      &vel_publisher,
+      &node,
+      ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
+      "/right_vel"
+  ));
+
 	int callback_size = 1;	// コールバックを行う数
 //	executor = rclc_executor_get_zero_initialized_executor();
   RCCHECK(rclc_executor_init(&executor, &support.context, callback_size, &allocator));
-  RCCHECK(rclc_executor_add_subscription(&executor, &subscriber, &msg, &subscription_callback, ON_NEW_DATA));
-  RCCHECK(rclc_publisher_init_best_effort(
-      &odom_publisher,
-      &node,
-      ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry),
-      "/odom"
-  ));
+  RCCHECK(rclc_executor_add_subscription(&executor, &subscriber, &msg_sub, &subscription_callback, ON_NEW_DATA));
+
 }
 
 void logReceivedData(const geometry_msgs__msg__Twist *msg) {
@@ -254,7 +276,7 @@ void updateOdometry(float rightWheelSpeed, float leftWheelSpeed) {
 }
 
 void prepareAndPublishOdometry(double x, double y, double theta, double linear_velocity, double angular_velocity) {
-    nav_msgs__msg__Odometry odom_msg;
+/*    nav_msgs__msg__Odometry odom_msg;
 
     // 現在のROS 2タイムスタンプを取得
     rcutils_time_point_value_t now;
@@ -266,14 +288,14 @@ void prepareAndPublishOdometry(double x, double y, double theta, double linear_v
     // 文字列フィールドに値を直接設定
     const char* frame_id = "odom";
     const char* child_frame_id = "base_link";
-
+*/
 /*    strncpy(odom_msg.header.frame_id.data, frame_id, sizeof(odom_msg.header.frame_id.data));
     odom_msg.header.frame_id.size = strlen(frame_id);
 
     strncpy(odom_msg.child_frame_id.data, child_frame_id, sizeof(odom_msg.child_frame_id.data));
     odom_msg.child_frame_id.size = strlen(child_frame_id);
 */
-    odom_msg.pose.pose.position.x = x;
+/*    odom_msg.pose.pose.position.x = x;
     odom_msg.pose.pose.position.y = y;
     // Z軸は0として、2Dナビゲーションを想定
     odom_msg.pose.pose.position.z = 0.0;
@@ -285,6 +307,7 @@ void prepareAndPublishOdometry(double x, double y, double theta, double linear_v
 
     // オドメトリのメッセージをパブリッシュ
     RCCHECK(rcl_publish(&odom_publisher, &odom_msg, NULL));
+*/
 }
 
 void setQuaternionFromYaw(double yaw, geometry_msgs__msg__Quaternion *orientation) {
@@ -295,8 +318,8 @@ void setQuaternionFromYaw(double yaw, geometry_msgs__msg__Quaternion *orientatio
 }
 
 float readSpeedData(HardwareSerial& serial, byte motorID) {
-    motorController.sendCommand(motorID, ACTUAL_SPEED_DEC_ADDRESS, READ_COMMAND, 0);
-    while (serial.available() >= 10) {
+    motorController.sendCommand(motorID, ACTUAL_SPEED_DEC_ADDRESS, READ_DEC_COMMAND, 0);
+    if (serial.available() >= 10) {
         uint8_t response[10];
         serial.readBytes(response, 10);
         uint16_t responseAddress = ((uint16_t)response[2] << 8) | response[3];
@@ -305,14 +328,7 @@ float readSpeedData(HardwareSerial& serial, byte motorID) {
             memcpy(&receivedDec, &response[5], sizeof(receivedDec));
             receivedDec = reverseBytes(receivedDec);
             float velocityMPS = calculateVelocityMPS(receivedDec);
-            Serial.print("Motor ");
-            Serial.print(motorID);
-            Serial.print("Received DEC: ");
-            Serial.print(receivedDec);
-            Serial.print(" - Velocity in mps: ");
-            Serial.println(velocityMPS);
-            return velocityMPS;
-        }
+            return velocityMPS;        }
     }
     return 0.0;
 }
@@ -324,16 +340,20 @@ uint32_t reverseBytes(uint32_t value) {
            ((value & 0xFF000000) >> 24);
 }
 
+#define SCALE_FACTOR 1000 // 1000倍して整数演算を行う
+
+// 定数の事前計算
+const float WHEEL_CIRCUMFERENCE = WHEEL_RADIUS * 2 * PI / 60.0 * SCALE_FACTOR; // 60で割るのもここで行う
+
 float calculateVelocityMPS(int32_t dec) {
-    float wheelCircumference = WHEEL_RADIUS * 2 * PI;
-    float rpm = (dec * 1875.0) / (512.0 * 4096);
-    return (rpm * wheelCircumference) / 60.0;
+    int scaledRPM = (dec * 1875) / (512 * 4096);
+    return (scaledRPM * WHEEL_CIRCUMFERENCE) / SCALE_FACTOR;
 }
 
 void sendMotorCommands(float linearVelocity, float angularVelocity) {
   // ここで左右のホイールの速度を計算
   float rightWheelSpeed = linearVelocity + (WHEEL_DISTANCE * angularVelocity / 2);
-  float leftWheelSpeed = linearVelocity - (WHEEL_DISTANCE * angularVelocity / 2);
+  float leftWheelSpeed = (-1) * (linearVelocity + (WHEEL_DISTANCE * angularVelocity / 2));
 
   int rightWheelDec = velocityToDEC(rightWheelSpeed);
   int leftWheelDec = velocityToDEC(leftWheelSpeed);
@@ -361,7 +381,7 @@ void MotorController::sendCommand(byte motorID, uint16_t address, byte command, 
     }
     
     // 条件に基づいて特定のバイトが特定の値の場合にのみパケット全体を表示
-    if ((packet[1] == 0x54 && packet[3] == 0xB2)) {
+    if ((packet[1] == 0xA4 && packet[3] == 0x77)) {
         M5.Lcd.setCursor(0, 80);
         M5.Lcd.print("Packet: ");
         for (int i = 0; i < sizeof(packet); i++) {
@@ -373,7 +393,7 @@ void MotorController::sendCommand(byte motorID, uint16_t address, byte command, 
         M5.Lcd.println();
     }
 
-    if ((packet[1] == 0x64 && packet[3] == 0xB2)) {
+    if ((packet[1] == 0xA4 && packet[3] == 0x77)) {
         M5.Lcd.setCursor(0, 140);
         M5.Lcd.print("Packet: ");
         for (int i = 0; i < sizeof(packet); i++) {
