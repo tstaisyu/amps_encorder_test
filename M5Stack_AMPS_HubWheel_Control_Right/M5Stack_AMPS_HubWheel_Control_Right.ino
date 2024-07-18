@@ -187,7 +187,7 @@ void publishSpeedData() {
 
   float leftWheelSpeed = readSpeedData(leftMotorSerial, MOTOR_LEFT_ID);
 
-  msg_pub.linear.x = (-1) * leftWheelSpeed;
+  msg_pub.linear.x = leftWheelSpeed;
 
   // データをパブリッシュ
   rcl_publish(&vel_publisher, &msg_pub, NULL);
@@ -353,7 +353,7 @@ float calculateVelocityMPS(int32_t dec) {
 void sendMotorCommands(float linearVelocity, float angularVelocity) {
   // ここで左右のホイールの速度を計算
   float rightWheelSpeed = linearVelocity + (WHEEL_DISTANCE * angularVelocity / 2);
-  float leftWheelSpeed = (-1) * (linearVelocity + (WHEEL_DISTANCE * angularVelocity / 2));
+  float leftWheelSpeed = linearVelocity - (WHEEL_DISTANCE * angularVelocity / 2);
 
   int rightWheelDec = velocityToDEC(rightWheelSpeed);
   int leftWheelDec = velocityToDEC(leftWheelSpeed);
