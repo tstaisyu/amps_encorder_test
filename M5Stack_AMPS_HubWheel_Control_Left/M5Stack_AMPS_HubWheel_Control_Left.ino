@@ -30,14 +30,14 @@
 
 class MotorController {
 private:
-  HardwareSerial& rightMotorSerial;
-  HardwareSerial& leftMotorSerial;
+    HardwareSerial& rightMotorSerial;
+    HardwareSerial& leftMotorSerial;
 
 public:
-  MotorController(HardwareSerial& rightSerial, HardwareSerial& leftSerial)
+    MotorController(HardwareSerial& rightSerial, HardwareSerial& leftSerial)
     : rightMotorSerial(rightSerial), leftMotorSerial(leftSerial) {}
 
-  void sendCommand(byte motorID, uint16_t address, byte command, uint32_t data);
+    void sendCommand(byte motorID, uint16_t address, byte command, uint32_t data);
 };
 
 struct VelocityCommand {
@@ -48,16 +48,16 @@ struct VelocityCommand {
 // グローバル変数で現在の位置と姿勢を保持
 double x_position = 0.0;
 double y_position = 0.0;
-double theta = 0.0;  // ロボットの向き（ラジアン）
+double theta = 0.0; // ロボットの向き（ラジアン）
 
 constexpr byte MOTOR_RIGHT_ID = 0x02;
 constexpr byte MOTOR_LEFT_ID = 0x01;
 
 // UARTピン設定
-constexpr int RX_PIN_1 = 21;  // UART1のRXピン
-constexpr int TX_PIN_1 = 22;  // UART1のTXピン
-constexpr int RX_PIN_2 = 16;  // UART2のRXピン
-constexpr int TX_PIN_2 = 17;  // UART2のTXピン
+constexpr int RX_PIN_1 = 21; // UART1のRXピン
+constexpr int TX_PIN_1 = 22; // UART1のTXピン
+constexpr int RX_PIN_2 = 16; // UART2のRXピン
+constexpr int TX_PIN_2 = 17; // UART2のTXピン
 
 // オブジェクトアドレス
 constexpr uint16_t OPERATION_MODE_ADDRESS = 0x7017;
@@ -82,24 +82,24 @@ constexpr uint32_t NO_DATA = 0x00000000;
 
 // 通信設定
 constexpr int BAUD_RATE = 115200;
-constexpr byte ERROR_BYTE = 0x00;  // エラーバイトは必要に応じて調整
+constexpr byte ERROR_BYTE = 0x00; // エラーバイトは必要に応じて調整
 
 // ディレイ設定
-constexpr uint16_t COMMAND_DELAY = 100;   // コマンド間のディレイ
-constexpr uint32_t SEND_INTERVAL = 1000;  // 速度コマンドの送信間隔 (ミリ秒)
+constexpr uint16_t COMMAND_DELAY = 100; // コマンド間のディレイ
+constexpr uint32_t SEND_INTERVAL = 1000; // 速度コマンドの送信間隔 (ミリ秒)
 
 // モーター仕様
-constexpr float WHEEL_RADIUS = 0.055;    // 車輪の半径 (メートル)
-constexpr float WHEEL_DISTANCE = 0.202;  // ホイール間の距離を設定 (メートル)
+constexpr float WHEEL_RADIUS = 0.055; // 車輪の半径 (メートル)
+constexpr float WHEEL_DISTANCE = 0.202; // ホイール間の距離を設定 (メートル)
 
-bool initial_data_received = false;   // データ受信の有無を追跡
-unsigned long last_receive_time = 0;  // 最後にデータを受信した時刻
-#define RECEIVE_TIMEOUT 5000          // タイムアウト値を5000ミリ秒に設定
+bool initial_data_received = false; // データ受信の有無を追跡
+unsigned long last_receive_time = 0; // 最後にデータを受信した時刻
+#define RECEIVE_TIMEOUT 5000 // タイムアウト値を5000ミリ秒に設定
 
 BluetoothSerial SerialBT;
 
-HardwareSerial rightMotorSerial(1);  // UART1, 右ホイール用
-HardwareSerial leftMotorSerial(2);   // UART2, 左ホイール用
+HardwareSerial rightMotorSerial(1); // UART1, 右ホイール用
+HardwareSerial leftMotorSerial(2); // UART2, 左ホイール用
 
 MotorController motorController(rightMotorSerial, leftMotorSerial);
 
@@ -119,57 +119,46 @@ rcl_timer_t timer;
 //rcl_init_options_t init_options; // Humble
 //size_t domain_id = 117;
 unsigned long lastReadTime = 0;
-const unsigned int readInterval = 40;
+const unsigned int readInterval = 40; 
 
-#define RCCHECK(fn) \
-  { \
-    rcl_ret_t temp_rc = fn; \
-    if ((temp_rc != RCL_RET_OK)) { \
-      Serial.println("Error in " #fn); \
-      return; \
-    } \
-  }
-#define RCSOFTCHECK(fn) \
-  { \
-    rcl_ret_t temp_rc = fn; \
-    if ((temp_rc != RCL_RET_OK)) {} \
-  }
+#define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if ((temp_rc != RCL_RET_OK)) {Serial.println("Error in " #fn); return;}}
+#define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
 
-void subscription_callback(const void* msgin) {
+void subscription_callback(const void * msgin) {
 
-  const geometry_msgs__msg__Twist* msg_sub = (const geometry_msgs__msg__Twist*)msgin;
+  const geometry_msgs__msg__Twist * msg_sub = (const geometry_msgs__msg__Twist *)msgin;
   last_receive_time = millis();
   if (!initial_data_received) {
     initial_data_received = true;
   }
-
+  
   updateDisplay(msg_sub);
-  //  logReceivedData(msg_sub);
+//  logReceivedData(msg_sub);
   sendMotorCommands(msg_sub->linear.x, msg_sub->angular.z);
 
-  //  updateOdometry(rightWheelSpeed, leftWheelSpeed); // オドメトリの更新
+//  updateOdometry(rightWheelSpeed, leftWheelSpeed); // オドメトリの更新
+
 }
 
 void setup() {
   Serial.begin(BAUD_RATE);
-  while (!Serial)
-    ;  // シリアルポートが開くのを待つ
+  while(!Serial);  // シリアルポートが開くのを待つ
   // UART1の初期化
   rightMotorSerial.begin(BAUD_RATE, SERIAL_8N1, RX_PIN_1, TX_PIN_1);
   // UART2の初期化
   leftMotorSerial.begin(BAUD_RATE, SERIAL_8N1, RX_PIN_2, TX_PIN_2);
   Serial.println("Setup complete. Ready to read high resolution speed data.");
-  initMotor(rightMotorSerial, MOTOR_RIGHT_ID);
-  initMotor(leftMotorSerial, MOTOR_LEFT_ID);
+  initMotor(rightMotorSerial, MOTOR_RIGHT_ID);  
+  initMotor(leftMotorSerial, MOTOR_LEFT_ID);  
 
   M5.begin();
   delay(500);
   M5.Lcd.setTextSize(2);
   M5.Lcd.setCursor(0, 0);  // ステータスメッセージの位置を設定
-  M5.Lcd.print("micro ROS2 M5Stack START\n");
+  M5.Lcd.print("micro ROS2 M5Stack START\n");  
 
   setupMicroROS();
-  last_receive_time = millis();
+  last_receive_time = millis();  
 }
 
 void loop() {
@@ -202,16 +191,17 @@ void publishSpeedData() {
 
   // データをパブリッシュ
   rcl_publish(&vel_publisher, &msg_pub, NULL);
+
 }
 
 void setupMicroROS() {
-  set_microros_transports();
+	set_microros_transports();
   allocator = rcl_get_default_allocator();
   RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
-  //init_options = rcl_get_zero_initialized_init_options();
-  //RCCHECK(rcl_init_options_init(&init_options, allocator));
-  //RCCHECK(rcl_init_options_set_domain_id(&init_options, domain_id));		// ドメインIDの設定
-  //RCCHECK(rclc_support_init_with_options(&support, 0, NULL, &init_options, &allocator)); // 前のrclc_support_initは削除する
+	//init_options = rcl_get_zero_initialized_init_options();
+	//RCCHECK(rcl_init_options_init(&init_options, allocator));
+	//RCCHECK(rcl_init_options_set_domain_id(&init_options, domain_id));		// ドメインIDの設定
+	//RCCHECK(rclc_support_init_with_options(&support, 0, NULL, &init_options, &allocator)); // 前のrclc_support_initは削除する
   RCCHECK(rclc_node_init_default(&node, "subscriber_node", "", &support));
   RCCHECK(rclc_subscription_init_best_effort(
     &subscriber,
@@ -220,26 +210,28 @@ void setupMicroROS() {
     "/cmd_vel"));
 
   RCCHECK(rclc_publisher_init_best_effort(
-    &vel_publisher,
-    &node,
-    ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
-    "/left_vel"));
+      &vel_publisher,
+      &node,
+      ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
+      "/left_vel"
+  ));
 
-  int callback_size = 1;  // コールバックを行う数
-                          //	executor = rclc_executor_get_zero_initialized_executor();
+	int callback_size = 1;	// コールバックを行う数
+//	executor = rclc_executor_get_zero_initialized_executor();
   RCCHECK(rclc_executor_init(&executor, &support.context, callback_size, &allocator));
   RCCHECK(rclc_executor_add_subscription(&executor, &subscriber, &msg_sub, &subscription_callback, ON_NEW_DATA));
+
 }
 
-void logReceivedData(const geometry_msgs__msg__Twist* msg) {
+void logReceivedData(const geometry_msgs__msg__Twist *msg) {
   Serial.print("Received linear.x: ");
   Serial.println(msg->linear.x);
   Serial.print("Received angular.z: ");
   Serial.println(msg->angular.z);
 }
 
-void updateDisplay(const geometry_msgs__msg__Twist* msg) {
-  M5.Lcd.clear();           // LCD画面をクリア
+void updateDisplay(const geometry_msgs__msg__Twist *msg) {
+  M5.Lcd.clear();  // LCD画面をクリア
   M5.Lcd.setCursor(0, 20);  // テキスト表示位置を設定
   M5.Lcd.print("Callback triggered");
 
@@ -253,38 +245,38 @@ void updateDisplay(const geometry_msgs__msg__Twist* msg) {
 }
 
 void initMotor(HardwareSerial& serial, byte motorID) {
-  motorController.sendCommand(motorID, OPERATION_MODE_ADDRESS, MOTOR_SETUP_COMMAND, OPERATION_MODE_SPEED_CONTROL);
-  delay(COMMAND_DELAY);
-  motorController.sendCommand(motorID, EMERGENCY_STOP_ADDRESS, MOTOR_SETUP_COMMAND, DISABLE_EMERGENCY_STOP);
-  delay(COMMAND_DELAY);
-  motorController.sendCommand(motorID, CONTROL_WORD_ADDRESS, MOTOR_ENABLE_COMMAND, ENABLE_MOTOR);
-  delay(COMMAND_DELAY);
+    motorController.sendCommand(motorID, OPERATION_MODE_ADDRESS, MOTOR_SETUP_COMMAND, OPERATION_MODE_SPEED_CONTROL);
+    delay(COMMAND_DELAY);
+    motorController.sendCommand(motorID, EMERGENCY_STOP_ADDRESS, MOTOR_SETUP_COMMAND, DISABLE_EMERGENCY_STOP);
+    delay(COMMAND_DELAY);
+    motorController.sendCommand(motorID, CONTROL_WORD_ADDRESS, MOTOR_ENABLE_COMMAND, ENABLE_MOTOR);
+    delay(COMMAND_DELAY);
 }
 
 void updateOdometry(float rightWheelSpeed, float leftWheelSpeed) {
-  static unsigned long last_encoder_receive_time = 0;
-  unsigned long current_time = millis();
-  double dt = (current_time - last_encoder_receive_time) / 1000.0;
-  last_encoder_receive_time = current_time;
+    static unsigned long last_encoder_receive_time = 0;
+    unsigned long current_time = millis();
+    double dt = (current_time - last_encoder_receive_time) / 1000.0;
+    last_encoder_receive_time = current_time;
 
-  // 左右の車輪の速度を計算
-  double v_right = rightWheelSpeed * WHEEL_RADIUS;
-  double v_left = leftWheelSpeed * WHEEL_RADIUS;
+    // 左右の車輪の速度を計算
+    double v_right = rightWheelSpeed * WHEEL_RADIUS;
+    double v_left = leftWheelSpeed * WHEEL_RADIUS;
 
-  // 中心線上の速度と角速度を計算
-  double v = (v_right + v_left) / 2.0;
-  double omega = (v_right - v_left) / WHEEL_DISTANCE;
+    // 中心線上の速度と角速度を計算
+    double v = (v_right + v_left) / 2.0;
+    double omega = (v_right - v_left) / WHEEL_DISTANCE;
 
-  // 新しい位置と姿勢を計算
-  x_position += v * cos(theta) * dt;
-  y_position += v * sin(theta) * dt;
-  theta += omega * dt;
+    // 新しい位置と姿勢を計算
+    x_position += v * cos(theta) * dt;
+    y_position += v * sin(theta) * dt;
+    theta += omega * dt;
 
-  prepareAndPublishOdometry(x_position, y_position, theta, v, omega);
+    prepareAndPublishOdometry(x_position, y_position, theta, v, omega);
 }
 
 void prepareAndPublishOdometry(double x, double y, double theta, double linear_velocity, double angular_velocity) {
-  /*    nav_msgs__msg__Odometry odom_msg;
+/*    nav_msgs__msg__Odometry odom_msg;
 
     // 現在のROS 2タイムスタンプを取得
     rcutils_time_point_value_t now;
@@ -297,13 +289,13 @@ void prepareAndPublishOdometry(double x, double y, double theta, double linear_v
     const char* frame_id = "odom";
     const char* child_frame_id = "base_link";
 */
-  /*    strncpy(odom_msg.header.frame_id.data, frame_id, sizeof(odom_msg.header.frame_id.data));
+/*    strncpy(odom_msg.header.frame_id.data, frame_id, sizeof(odom_msg.header.frame_id.data));
     odom_msg.header.frame_id.size = strlen(frame_id);
 
     strncpy(odom_msg.child_frame_id.data, child_frame_id, sizeof(odom_msg.child_frame_id.data));
     odom_msg.child_frame_id.size = strlen(child_frame_id);
 */
-  /*    odom_msg.pose.pose.position.x = x;
+/*    odom_msg.pose.pose.position.x = x;
     odom_msg.pose.pose.position.y = y;
     // Z軸は0として、2Dナビゲーションを想定
     odom_msg.pose.pose.position.z = 0.0;
@@ -318,48 +310,50 @@ void prepareAndPublishOdometry(double x, double y, double theta, double linear_v
 */
 }
 
-void setQuaternionFromYaw(double yaw, geometry_msgs__msg__Quaternion* orientation) {
-  orientation->x = 0.0;
-  orientation->y = 0.0;
-  orientation->z = sin(yaw / 2);
-  orientation->w = cos(yaw / 2);
+void setQuaternionFromYaw(double yaw, geometry_msgs__msg__Quaternion *orientation) {
+    orientation->x = 0.0;
+    orientation->y = 0.0;
+    orientation->z = sin(yaw / 2);
+    orientation->w = cos(yaw / 2);
 }
 
 float readSpeedData(HardwareSerial& serial, byte motorID) {
-  motorController.sendCommand(motorID, ACTUAL_SPEED_DEC_ADDRESS, READ_DEC_COMMAND, 0);
-  if (serial.available() >= 10) {
-    uint8_t response[10];
-    serial.readBytes(response, 10);
-    uint16_t responseAddress = ((uint16_t)response[2] << 8) | response[3];
-    if (response[0] == motorID && response[1] == READ_DEC_SUCCESS && responseAddress == ACTUAL_SPEED_DEC_ADDRESS) {
-      int32_t receivedDec;
-      memcpy(&receivedDec, &response[5], sizeof(receivedDec));
-      receivedDec = reverseBytes(receivedDec);
-      float velocityMPS = calculateVelocityMPS(receivedDec);
-      return velocityMPS;
+    motorController.sendCommand(motorID, ACTUAL_SPEED_DEC_ADDRESS, READ_DEC_COMMAND, 0);
+    if (serial.available() >= 10) {
+        uint8_t response[10];
+        serial.readBytes(response, 10);
+        uint16_t responseAddress = ((uint16_t)response[2] << 8) | response[3];
+        if (response[0] == motorID && response[1] == READ_DEC_SUCCESS && responseAddress == ACTUAL_SPEED_DEC_ADDRESS) {
+            int32_t receivedDec;
+            memcpy(&receivedDec, &response[5], sizeof(receivedDec));
+            receivedDec = reverseBytes(receivedDec);
+            float velocityMPS = calculateVelocityMPS(receivedDec);
+            return velocityMPS;        }
     }
-  }
-  return 0.0;
+    return 0.0;
 }
 
 uint32_t reverseBytes(uint32_t value) {
-  return ((value & 0x000000FF) << 24) | ((value & 0x0000FF00) << 8) | ((value & 0x00FF0000) >> 8) | ((value & 0xFF000000) >> 24);
+    return ((value & 0x000000FF) << 24) |
+           ((value & 0x0000FF00) << 8) |
+           ((value & 0x00FF0000) >> 8) |
+           ((value & 0xFF000000) >> 24);
 }
 
-#define SCALE_FACTOR 1000  // 1000倍して整数演算を行う
+#define SCALE_FACTOR 1000 // 1000倍して整数演算を行う
 
 // 定数の事前計算
-const float WHEEL_CIRCUMFERENCE = WHEEL_RADIUS * 2 * PI / 60.0 * SCALE_FACTOR;  // 60で割るのもここで行う
+const float WHEEL_CIRCUMFERENCE = WHEEL_RADIUS * 2 * PI / 60.0 * SCALE_FACTOR; // 60で割るのもここで行う
 
 float calculateVelocityMPS(int32_t dec) {
-  int scaledRPM = (dec * 1875) / (512 * 4096);
-  return (scaledRPM * WHEEL_CIRCUMFERENCE) / SCALE_FACTOR;
+    int scaledRPM = (dec * 1875) / (512 * 4096);
+    return (scaledRPM * WHEEL_CIRCUMFERENCE) / SCALE_FACTOR;
 }
 
 void sendMotorCommands(float linearVelocity, float angularVelocity) {
   // ここで左右のホイールの速度を計算
   float rightWheelSpeed = linearVelocity + (WHEEL_DISTANCE * angularVelocity / 2);
-  float leftWheelSpeed = (-1) * (linearVelocity * (WHEEL_DISTANCE * angularVelocity / 2));
+  float leftWheelSpeed = (-1) * (linearVelocity + (WHEEL_DISTANCE * angularVelocity / 2));
 
   int rightWheelDec = velocityToDEC(rightWheelSpeed);
   int leftWheelDec = velocityToDEC(leftWheelSpeed);
@@ -374,53 +368,53 @@ void sendVelocityDEC(HardwareSerial& serial, int velocityDec, byte motorID) {
 }
 
 uint32_t velocityToDEC(float velocityMPS) {
-  float wheelCircumference = WHEEL_RADIUS * 2 * PI;
-  float rpm = (velocityMPS * 60.0) / wheelCircumference;
-  return static_cast<uint32_t>((rpm * 512.0 * 4096.0) / 1875.0);
+    float wheelCircumference = WHEEL_RADIUS * 2 * PI;
+    float rpm = (velocityMPS * 60.0) / wheelCircumference;
+    return static_cast<uint32_t>((rpm * 512.0 * 4096.0) / 1875.0);
 }
 
 void MotorController::sendCommand(byte motorID, uint16_t address, byte command, uint32_t data) {
-  byte packet[] = { motorID, command, highByte(address), lowByte(address), ERROR_BYTE, (byte)(data >> 24), (byte)(data >> 16), (byte)(data >> 8), (byte)data };
-  byte checksum = 0;
-  for (int i = 0; i < sizeof(packet); i++) {
-    checksum += packet[i];
-  }
-
-  // 条件に基づいて特定のバイトが特定の値の場合にのみパケット全体を表示
-  if ((packet[1] == 0xA4 && packet[3] == 0x77)) {
-    M5.Lcd.setCursor(0, 80);
-    M5.Lcd.print("Packet: ");
+    byte packet[] = {motorID, command, highByte(address), lowByte(address), ERROR_BYTE, (byte)(data >> 24), (byte)(data >> 16), (byte)(data >> 8), (byte)data};
+    byte checksum = 0;
     for (int i = 0; i < sizeof(packet); i++) {
-      M5.Lcd.printf("%02X ", packet[i]);
+        checksum += packet[i];
     }
-    M5.Lcd.println();
-    M5.Lcd.setCursor(0, 120);
-    M5.Lcd.printf("Checksum: %02X", checksum);
-    M5.Lcd.println();
-  }
-
-  if ((packet[1] == 0xA4 && packet[3] == 0x77)) {
-    M5.Lcd.setCursor(0, 140);
-    M5.Lcd.print("Packet: ");
-    for (int i = 0; i < sizeof(packet); i++) {
-      M5.Lcd.printf("%02X ", packet[i]);
+    
+    // 条件に基づいて特定のバイトが特定の値の場合にのみパケット全体を表示
+    if ((packet[1] == 0xA4 && packet[3] == 0x77)) {
+        M5.Lcd.setCursor(0, 80);
+        M5.Lcd.print("Packet: ");
+        for (int i = 0; i < sizeof(packet); i++) {
+            M5.Lcd.printf("%02X ", packet[i]);
+        }
+        M5.Lcd.println();
+        M5.Lcd.setCursor(0, 120);
+        M5.Lcd.printf("Checksum: %02X", checksum);
+        M5.Lcd.println();
     }
-    M5.Lcd.println();
-    M5.Lcd.setCursor(0, 180);
-    M5.Lcd.printf("Checksum: %02X", checksum);
-    M5.Lcd.println();
-  }
 
-  if (motorID == MOTOR_RIGHT_ID) {
-    rightMotorSerial.write(packet, sizeof(packet));
-    rightMotorSerial.write(checksum);
-  } else {
-    leftMotorSerial.write(packet, sizeof(packet));
-    leftMotorSerial.write(checksum);
-  }
+    if ((packet[1] == 0xA4 && packet[3] == 0x77)) {
+        M5.Lcd.setCursor(0, 140);
+        M5.Lcd.print("Packet: ");
+        for (int i = 0; i < sizeof(packet); i++) {
+            M5.Lcd.printf("%02X ", packet[i]);
+        }
+        M5.Lcd.println();
+        M5.Lcd.setCursor(0, 180);
+        M5.Lcd.printf("Checksum: %02X", checksum);
+        M5.Lcd.println();
+    }
+
+    if (motorID == MOTOR_RIGHT_ID) {
+        rightMotorSerial.write(packet, sizeof(packet));
+        rightMotorSerial.write(checksum);
+    } else {
+        leftMotorSerial.write(packet, sizeof(packet));
+        leftMotorSerial.write(checksum);
+    }
 }
 
-byte calculateChecksum(byte* data, int len) {
+byte calculateChecksum(byte *data, int len) {
   byte sum = 0;
   for (int i = 0; i < len; i++) {
     sum += data[i];
