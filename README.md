@@ -16,4 +16,4 @@
 
 # Referrence
 
-[![User-Manual: English]](file:///home/taisyu/%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89/IWS%20Series%20Hub%20Motor%20Motor%20User%20Manual20211230.pdf)
+[User-Manual: English](file:///home/taisyu/%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89/IWS%20Series%20Hub%20Motor%20Motor%20User%20Manual20211230.pdf)
