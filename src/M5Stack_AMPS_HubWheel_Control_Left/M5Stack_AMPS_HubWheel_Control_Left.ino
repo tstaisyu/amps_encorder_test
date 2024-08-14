@@ -222,7 +222,3 @@ void setQuaternionFromYaw(double yaw, geometry_msgs__msg__Quaternion *orientatio
     orientation->w = cos(yaw / 2);
 }
 
-#define SCALE_FACTOR 1000 // 1000倍して整数演算を行う
-
-// 定数の事前計算
-const float WHEEL_CIRCUMFERENCE = WHEEL_RADIUS * 2 * PI / 60.0 * SCALE_FACTOR; // 60で割るのもここで行う
