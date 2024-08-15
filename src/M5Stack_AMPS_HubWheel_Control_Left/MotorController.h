@@ -117,14 +117,14 @@ rclc_support_t support;
 rcl_allocator_t allocator;
 rcl_node_t node;
 rcl_timer_t timer;
-
 //rcl_init_options_t init_options; // Humble
 //size_t domain_id = 117;
-unsigned long lastReadTime = 0;
-const unsigned int readInterval = 40; 
 
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if ((temp_rc != RCL_RET_OK)) {Serial.println("Error in " #fn); return;}}
 #define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
+
+unsigned long lastReadTime = 0;
+const unsigned int readInterval = 40; 
 
 #endif // MOTOR_CONTROLLER_H
 
