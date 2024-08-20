@@ -28,6 +28,7 @@
 #include <geometry_msgs/msg/twist.h>
 #include <nav_msgs/msg/odometry.h>
 #include "MotorController.h"
+#include "RosCommunications.h"
 
 void subscription_callback(const void * msgin) {
 
