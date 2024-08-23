@@ -13,6 +13,11 @@
  * limitations under the License.
  */
 
+#ifndef ROS_COMMUNICATIONS_H
+#define ROS_COMMUNICATIONS_H
+
 void logReceivedData(const geometry_msgs__msg__Twist *msg);
 void updateDisplay(const geometry_msgs__msg__Twist *msg);
 void initMotor(HardwareSerial& serial, byte motorID);
+
+#endif
