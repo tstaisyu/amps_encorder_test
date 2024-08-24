@@ -16,6 +16,22 @@
 #ifndef ROS_COMMUNICATIONS_H
 #define ROS_COMMUNICATIONS_H
 
+rcl_subscription_t subscriber;
+geometry_msgs__msg__Twist msg_sub;
+geometry_msgs__msg__Twist msg_pub;
+rcl_publisher_t vel_publisher;
+nav_msgs__msg__Odometry odom_msg;
+rclc_executor_t executor;
+rclc_support_t support;
+rcl_allocator_t allocator;
+rcl_node_t node;
+rcl_timer_t timer;
+//rcl_init_options_t init_options; // Humble
+//size_t domain_id = 117;
+
+#define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if ((temp_rc != RCL_RET_OK)) {Serial.println("Error in " #fn); return;}}
+#define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
+
 void logReceivedData(const geometry_msgs__msg__Twist *msg);
 void updateDisplay(const geometry_msgs__msg__Twist *msg);
 void initMotor(HardwareSerial& serial, byte motorID);
