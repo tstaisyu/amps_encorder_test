@@ -35,5 +35,8 @@ rcl_timer_t timer;
 void logReceivedData(const geometry_msgs__msg__Twist *msg);
 void updateDisplay(const geometry_msgs__msg__Twist *msg);
 void initMotor(HardwareSerial& serial, byte motorID);
+void updateOdometry(float rightWheelSpeed, float leftWheelSpeed);
+void prepareAndPublishOdometry(double x, double y, double theta, double linear_velocity, double angular_velocity);
+void setQuaternionFromYaw(double yaw, geometry_msgs__msg__Quaternion *orientation);
 
 #endif

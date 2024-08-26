@@ -42,3 +42,67 @@ void initMotor(HardwareSerial& serial, byte motorID) {
     motorController.sendCommand(motorID, CONTROL_WORD_ADDRESS, MOTOR_ENABLE_COMMAND, ENABLE_MOTOR);
     delay(COMMAND_DELAY);
 }
+
+void updateOdometry(float rightWheelSpeed, float leftWheelSpeed) {
+    static unsigned long last_encoder_receive_time = 0;
+    unsigned long current_time = millis();
+    double dt = (current_time - last_encoder_receive_time) / 1000.0;
+    last_encoder_receive_time = current_time;
+
+    // 左右の車輪の速度を計算
+    double v_right = rightWheelSpeed * WHEEL_RADIUS;
+    double v_left = leftWheelSpeed * WHEEL_RADIUS;
+
+    // 中心線上の速度と角速度を計算
+    double v = (v_right + v_left) / 2.0;
+    double omega = (v_right - v_left) / WHEEL_DISTANCE;
+
+    // 新しい位置と姿勢を計算
+    x_position += v * cos(theta) * dt;
+    y_position += v * sin(theta) * dt;
+    theta += omega * dt;
+
+    prepareAndPublishOdometry(x_position, y_position, theta, v, omega);
+}
+
+void prepareAndPublishOdometry(double x, double y, double theta, double linear_velocity, double angular_velocity) {
+/*    nav_msgs__msg__Odometry odom_msg;
+
+    // 現在のROS 2タイムスタンプを取得
+    rcutils_time_point_value_t now;
+    rcutils_system_time_now(&now);
+
+    odom_msg.header.stamp.sec = now / 1000000000LL; // 秒単位に変換
+    odom_msg.header.stamp.nanosec = now % 1000000000LL; // 余りがナノ秒
+
+    // 文字列フィールドに値を直接設定
+    const char* frame_id = "odom";
+    const char* child_frame_id = "base_link";
+*/
+/*    strncpy(odom_msg.header.frame_id.data, frame_id, sizeof(odom_msg.header.frame_id.data));
+    odom_msg.header.frame_id.size = strlen(frame_id);
+
+    strncpy(odom_msg.child_frame_id.data, child_frame_id, sizeof(odom_msg.child_frame_id.data));
+    odom_msg.child_frame_id.size = strlen(child_frame_id);
+*/
+/*    odom_msg.pose.pose.position.x = x;
+    odom_msg.pose.pose.position.y = y;
+    // Z軸は0として、2Dナビゲーションを想定
+    odom_msg.pose.pose.position.z = 0.0;
+
+    setQuaternionFromYaw(theta, &odom_msg.pose.pose.orientation);
+
+    odom_msg.twist.twist.linear.x = linear_velocity;
+    odom_msg.twist.twist.angular.z = angular_velocity;
+
+    // オドメトリのメッセージをパブリッシュ
+    RCCHECK(rcl_publish(&odom_publisher, &odom_msg, NULL));
+*/
+}
+
+void setQuaternionFromYaw(double yaw, geometry_msgs__msg__Quaternion *orientation) {
+    orientation->x = 0.0;
+    orientation->y = 0.0;
+    orientation->z = sin(yaw / 2);
+    orientation->w = cos(yaw / 2);
+}
